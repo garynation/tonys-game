@@ -1,0 +1,7 @@
+services:
+  tonys-game:
+    build: .
+    container_name: tonys-jumping-game
+    ports:
+      - "8765:80"
+    restart: unless-stopped
