@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
+  <title>Tony's Jumping Game</title>
+  <link rel="stylesheet" href="styles.css?v=3" />
+</head>
+<body>
+  <!-- Top App Bar -->
+  <header id="top-bar" class="top-app-bar">
+    <div class="brand-cluster">
+      <div class="brand-badge" aria-hidden="true">
+        <span class="material-symbols-outlined">🚀</span>
+      </div>
+      <div class="brand-title-group">
+        <h1 class="app-title game-title">
+          <span>Tony's Jumping Game</span>
+          <span class="arcade-edition-pill">COSMIC ARCADE</span>
+        </h1>
+        <p class="app-subtitle">
+          Help <strong>Tony the Sheep</strong> leap across randomized solar system planets — bigger planets demand tighter launch timing &amp; award massive bonus points!
+        </p>
+      </div>
+    </div>
+
+    <div class="toolbar-actions control-bar" role="toolbar" aria-label="Game controls">
+      <button type="button" id="btn-new-run" class="btn-arcade btn-primary" title="Start New Run &amp; Re-Randomize Planet Sizes (R)">
+        <span class="material-symbols-outlined">🎲</span>
+        <span>New Run / Re-Randomize Planets</span>
+        <span class="kbd-hint">R</span>
+      </button>
+      <button type="button" id="btn-toggle-sound" class="btn-arcade is-active" aria-pressed="true" title="Toggle Retro Synth Sound Effects (M)">
+        <span class="material-symbols-outlined" id="icon-sound">🔊</span>
+        <span id="label-sound">Sound: ON</span>
+        <span class="kbd-hint">M</span>
+      </button>
+      <button type="button" id="btn-toggle-hitboxes" class="btn-arcade" aria-pressed="false" title="Toggle Hitbox &amp; Parabolic Jump Trajectory Guide (H)">
+        <span class="material-symbols-outlined">🎯</span>
+        <span id="label-hitboxes">Trajectory / Hitbox</span>
+        <span class="kbd-hint">H</span>
+      </button>
+      <button type="button" id="btn-pause" class="btn-arcade" aria-pressed="false" title="Pause / Resume Game (P)">
+        <span class="material-symbols-outlined" id="icon-pause">⏸</span>
+        <span id="label-pause">Pause</span>
+        <span class="kbd-hint">P</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Arcade Workbench -->
+  <main id="app-shell" class="arcade-workbench game-layout">
+    <!-- Left / Primary Game Stage Column -->
+    <div class="stage-column">
+      <!-- Live Arcade HUD Ribbon -->
+      <section id="arcade-hud" class="hud-ribbon" aria-label="Live run telemetry">
+        <div class="hud-metric">
+          <span class="hud-metric-label">Score</span>
+          <span id="hud-score" class="hud-metric-value score-primary">000000</span>
+        </div>
+        <div class="hud-metric">
+          <span class="hud-metric-label">High Score</span>
+          <span id="hud-high-score" class="hud-metric-value score-hi">HI 000000</span>
+        </div>
+        <div class="hud-metric">
+          <span class="hud-metric-label">Planets Jumped</span>
+          <span id="hud-planets-cleared" class="hud-metric-value">0</span>
+        </div>
+        <div class="hud-metric">
+          <span class="hud-metric-label">Clean Streak</span>
+          <span id="hud-streak" class="hud-metric-value streak-hot">1.0x (0)</span>
+        </div>
+        <div class="hud-metric">
+          <span class="hud-metric-label">Orbital Speed</span>
+          <span id="hud-speed" class="hud-metric-value speed-mach">MACH 1.0x</span>
+        </div>
+        <div class="hud-metric">
+          <span class="hud-metric-label">Approaching</span>
+          <span id="hud-next-planet" class="hud-metric-value next-planet">Scanning...</span>
+        </div>
+      </section>
+
+      <!-- Primary 60fps HTML5 Canvas Stage -->
+      <div id="game-canvas-container" class="canvas-stage-wrapper">
+        <canvas id="game-canvas" width="960" height="460" aria-label="Tony's Jumping Game Canvas — Press Spacebar to Jump"></canvas>
+      </div>
+
+      <!-- Stage Controls & Precision Timing Legend Strip -->
+      <div class="stage-controls-strip">
+        <div class="control-pill-group">
+          <span class="control-hint-item">
+            <span class="kbd-hint">SPACE</span>
+            <span>/</span>
+            <span class="kbd-hint">↑</span>
+            <span>or Click Canvas: <strong>Jump / Launch Run</strong> (hold slightly or hit the green <strong>Optimal Launch Zone</strong> for maximum apex!)</span>
+          </span>
+        </div>
+        <div class="control-pill-group">
+          <span class="control-hint-item">
+            <span class="kbd-hint">R</span>
+            <span>Re-Seed Planet Sizes</span>
+          </span>
+          <span class="control-hint-item">
+            <span class="kbd-hint">H</span>
+            <span>Hitbox &amp; Arc Guide</span>
+          </span>
+          <span class="control-hint-item">
+            <span class="kbd-hint">P</span>
+            <span>Pause</span>
+          </span>
+        </div>
+      </div>
+
+      <!-- Current Run's Randomized Planet Scale Strip & Scoring Tier Guide -->
+      <section id="planet-radar-panel" class="planet-strip-card" aria-labelledby="planet-strip-heading">
+        <div class="section-header-row">
+          <div>
+            <h2 id="planet-strip-heading" class="section-title">
+              <span class="material-symbols-outlined">🪐</span>
+              <span>Current Run Planet Size Seeds</span>
+              <span id="run-seed-badge" class="tier-badge tier-SMALL">RUN #1</span>
+            </h2>
+            <p class="section-subtitle" style="margin: 2px 0 0;">
+              Planet sizes randomize on every run across all 8 solar system worlds. Bigger planets require tighter takeoff timing and grant up to <strong>+1000+ pts</strong>!
+            </p>
+          </div>
+          <button type="button" id="btn-reroll-strip" class="btn-arcade" title="Re-Roll Planet Size Distribution (R)">
+            <span class="material-symbols-outlined">↻</span>
+            <span>Re-Roll Sizes</span>
+            <span class="kbd-hint">R</span>
+          </button>
+        </div>
+
+        <div id="planet-scale-strip" class="planet-scale-grid" role="list" aria-label="Randomized planet sizes for current run">
+          <!-- Populated dynamically by TonyArcadeUI.renderPlanetScaleStrip() -->
+        </div>
+
+        <!-- 5-Tier Size & Point Value Reference Strip -->
+        <div class="scoring-tier-legend" aria-label="Planet size scoring tiers">
+          <div class="scoring-tier-pill">
+            <span class="tier-badge tier-MINI">MINI</span>
+            <span>R:18–24px · <strong>+100 pts</strong> (1x)</span>
+          </div>
+          <div class="scoring-tier-pill">
+            <span class="tier-badge tier-SMALL">SMALL</span>
+            <span>R:26–33px · <strong>+200 pts</strong> (2x)</span>
+          </div>
+          <div class="scoring-tier-pill">
+            <span class="tier-badge tier-MEDIUM">MEDIUM</span>
+            <span>R:35–44px · <strong>+350 pts</strong> (3.5x)</span>
+          </div>
+          <div class="scoring-tier-pill">
+            <span class="tier-badge tier-LARGE">LARGE</span>
+            <span>R:46–56px · <strong>+600 pts</strong> (6x · Narrow Window)</span>
+          </div>
+          <div class="scoring-tier-pill">
+            <span class="tier-badge tier-COLOSSAL">COLOSSAL</span>
+            <span>R:58–70px · <strong>+1000 pts</strong> (10x · Precision Apex!)</span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Right Rail: Retro Arcade High Score Cabinet & Live Telemetry -->
+    <aside class="cabinet-column" aria-label="Retro Arcade High Score Leaderboard">
+      <section id="high-score-cabinet" class="arcade-cabinet-card" aria-labelledby="arcade-cabinet-heading">
+        <div class="arcade-marquee-header">
+          <div>
+            <h2 id="arcade-cabinet-heading" class="arcade-marquee-title">HIGH SCORES · TOP 10</h2>
+            <div class="arcade-marquee-sub">GALACTIC SHEEP HALL OF FAME</div>
+          </div>
+          <button type="button" id="btn-open-initials" class="btn-arcade" title="Log Your Name &amp; Score to the Arcade Board">
+            <span class="material-symbols-outlined">✎</span>
+            <span>Log Score</span>
+          </button>
+        </div>
+
+        <div class="arcade-table-wrapper">
+          <table class="arcade-score-table" id="high-score-table" aria-label="Top 10 Retro Arcade High Scores">
+            <thead>
+              <tr>
+                <th scope="col">RANK</th>
+                <th scope="col">PLAYER</th>
+                <th scope="col" class="num-col">SCORE</th>
+                <th scope="col" class="num-col">JMPS</th>
+                <th scope="col">BIGGEST CLEARED</th>
+              </tr>
+            </thead>
+            <tbody id="high-score-tbody">
+              <!-- Populated by TonyArcadeUI.renderHighScoreTable() -->
+            </tbody>
+          </table>
+        </div>
+
+        <div class="arcade-cabinet-footer">
+          <span class="section-subtitle">Saved in browser storage</span>
+          <button type="button" id="btn-reset-scores" class="btn-arcade" title="Immediately Clear All High Scores">
+            <span class="material-symbols-outlined">↺</span>
+            <span>Clear Board</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Live Planet Clearance Telemetry Feed -->
+      <section class="surface-card" aria-labelledby="telemetry-heading">
+        <div class="section-header-row" style="margin-bottom: 8px;">
+          <h2 id="telemetry-heading" class="section-title">
+            <span class="material-symbols-outlined">⚡</span>
+            <span>Recent Planet Jumps</span>
+          </h2>
+          <span class="section-subtitle">Close-call &amp; tier bonuses</span>
+        </div>
+        <ul id="telemetry-feed-list" class="telemetry-feed-list">
+          <li class="telemetry-feed-item">
+            <span class="telemetry-planet-tag">
+              <span class="tier-badge tier-COLOSSAL">READY</span>
+              <span>Press <strong>SPACEBAR</strong> to launch Tony!</span>
+            </span>
+            <span class="telemetry-points-tag">+100..+1000 PTS</span>
+          </li>
+        </ul>
+      </section>
+    </aside>
+  </main>
+
+  <!-- Full Player Name Entry Modal -->
+  <div id="initials-modal" class="arcade-initials-overlay is-hidden" hidden role="dialog" aria-modal="true" aria-labelledby="initials-dialog-title">
+    <div class="arcade-initials-dialog">
+      <span id="initials-rank-badge" class="initials-header-badge">NEW HIGH SCORE!</span>
+      <h2 id="initials-dialog-title" class="initials-dialog-title">ENTER PLAYER NAME</h2>
+      <p class="section-subtitle" style="margin:0;">Enter your full name or callsign for the Galactic Sheep Hall of Fame</p>
+
+      <div class="initials-run-summary">
+        <div class="summary-stat-box">
+          <span class="summary-stat-label">Final Score</span>
+          <span id="modal-run-score" class="summary-stat-val">000000</span>
+        </div>
+        <div class="summary-stat-box">
+          <span class="summary-stat-label">Planets Jumped</span>
+          <span id="modal-run-cleared" class="summary-stat-val">0</span>
+        </div>
+        <div class="summary-stat-box">
+          <span class="summary-stat-label">Biggest Cleared</span>
+          <span id="modal-run-biggest" class="summary-stat-val">—</span>
+        </div>
+      </div>
+
+      <div class="player-name-field-group">
+        <label for="arcade-player-name-input" class="player-name-field-label">Player Name</label>
+        <input
+          type="text"
+          id="arcade-player-name-input"
+          class="arcade-name-input"
+          maxlength="24"
+          placeholder="Enter your name..."
+          autocomplete="off"
+          spellcheck="false"
+          value="Tony"
+        />
+      </div>
+
+      <div class="initials-dialog-actions">
+        <button type="button" id="btn-save-initials" class="btn-arcade btn-primary">
+          <span class="material-symbols-outlined">🏆</span>
+          <span>SAVE TO ARCADE BOARD</span>
+          <span class="kbd-hint">ENTER</span>
+        </button>
+        <button type="button" id="btn-skip-initials" class="btn-arcade">
+          <span>SKIP</span>
+          <span class="kbd-hint">ESC</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Core Game Modules (Cache-Busted v3) -->
+  <script src="assets.js?v=3"></script>
+  <script src="engine.js?v=3"></script>
+  <script src="arcade.js?v=3"></script>
+
+  <!-- Application Integration, Legacy Storage Purge & Failsafe Wiring -->
+  <script>
+    (function () {
+      'use strict';
+
+      var LEGACY_SEED_PAIRS = {
+        'TNY:14850': true,
+        'SHP:11400': true,
+        'JUP:9250': true,
+        'SAT:7600': true,
+        'MAR:6150': true,
+        'BAH:4900': true,
+        'WOL:3450': true,
+        'SOL:2100': true
+      };
+
+      function purgeLegacySeedStorage() {
+        try {
+          if (typeof localStorage === 'undefined') return;
+          localStorage.removeItem('tonys_jumping_game_highscores_v1');
+          localStorage.removeItem('tonys_jumping_game_highscores_v2');
+          var rawV3 = localStorage.getItem('tonys_jumping_game_highscores_v3');
+          if (rawV3) {
+            var parsed = JSON.parse(rawV3);
+            if (Array.isArray(parsed)) {
+              var cleaned = parsed.filter(function (entry) {
+                if (!entry || typeof entry !== 'object') return false;
+                if (entry.isSeed || entry.seeded || String(entry.id || '').indexOf('seed-') === 0) return false;
+                var callsign = String(entry.name || entry.playerName || entry.initials || '').trim().toUpperCase();
+                var key = callsign + ':' + Number(entry.score || 0);
+                return !LEGACY_SEED_PAIRS[key];
+              });
+              if (cleaned.length !== parsed.length) {
+                localStorage.setItem('tonys_jumping_game_highscores_v3', JSON.stringify(cleaned));
+              }
+            }
+          }
+        } catch (_err) {}
+      }
+
+      function isInputOrModalActive(e) {
+        if (window.TonyArcadeUI && typeof window.TonyArcadeUI.isModalOpen === 'function' && window.TonyArcadeUI.isModalOpen()) {
+          return true;
+        }
+        var activeEl = document.activeElement;
+        if (activeEl) {
+          var activeTag = (activeEl.tagName || '').toUpperCase();
+          if (activeTag === 'INPUT' || activeTag === 'TEXTAREA' || activeTag === 'SELECT' || activeEl.isContentEditable) {
+            return true;
+          }
+        }
+        var target = e && e.target;
+        if (target) {
+          var targetTag = (target.tagName || '').toUpperCase();
+          if (targetTag === 'INPUT' || targetTag === 'TEXTAREA' || targetTag === 'SELECT' || target.isContentEditable) {
+            return true;
+          }
+        }
+        return false;
+      }
+
+      function initTonysJumpingGame() {
+        // 0. Always purge legacy v1/v2 seed scores before initializing UI or engine
+        purgeLegacySeedStorage();
+
+        var canvas = document.getElementById('game-canvas');
+        if (!canvas || !window.TonyGameEngine || !window.TonyArcadeUI) return;
+
+        // 1. Initialize Retro Arcade High Score Table & LocalStorage first
+        window.TonyArcadeUI.init();
+
+        function syncControlButtons(engine) {
+          if (!engine) return;
+          var soundBtn = document.getElementById('btn-toggle-sound');
+          var soundIcon = document.getElementById('icon-sound');
+          var soundLabel = document.getElementById('label-sound');
+          if (soundBtn) {
+            var soundOn = !engine.muted;
+            soundBtn.classList.toggle('is-active', soundOn);
+            soundBtn.setAttribute('aria-pressed', String(soundOn));
+            if (soundIcon) soundIcon.textContent = soundOn ? '🔊' : '🔇';
+            if (soundLabel) soundLabel.textContent = soundOn ? 'Sound: ON' : 'Sound: OFF';
+          }
+
+          var hitboxBtn = document.getElementById('btn-toggle-hitboxes');
+          if (hitboxBtn) {
+            hitboxBtn.classList.toggle('is-active', Boolean(engine.debugHitboxes));
+            hitboxBtn.setAttribute('aria-pressed', String(Boolean(engine.debugHitboxes)));
+          }
+
+          var pauseBtn = document.getElementById('btn-pause');
+          var pauseIcon = document.getElementById('icon-pause');
+          var pauseLabel = document.getElementById('label-pause');
+          if (pauseBtn) {
+            var paused = engine.status === 'PAUSED';
+            pauseBtn.classList.toggle('is-active', paused);
+            pauseBtn.setAttribute('aria-pressed', String(paused));
+            if (pauseIcon) pauseIcon.textContent = paused ? '▶' : '⏸';
+            if (pauseLabel) pauseLabel.textContent = paused ? 'Resume' : 'Pause';
+          }
+
+          var seedBadge = document.getElementById('run-seed-badge');
+          if (seedBadge) {
+            seedBadge.textContent = 'RUN #' + Math.max(1, engine.runId || 1);
+          }
+        }
+
+        // 2. Instantiate 60fps Game Engine wired to TonyArcadeUI
+        var engine = new window.TonyGameEngine({
+          canvas: canvas,
+          bindKeyboard: true,
+          bindPointer: true,
+          onManifestUpdate: function (manifest) {
+            var nextP = engine && typeof engine.getNextPlanet === 'function' ? engine.getNextPlanet() : null;
+            window.TonyArcadeUI.renderPlanetScaleStrip(manifest, nextP ? nextP.id : '');
+            syncControlButtons(engine);
+          },
+          onPlanetCleared: function (clearedRecord, state) {
+            window.TonyArcadeUI.logPlanetClear(clearedRecord);
+            window.TonyArcadeUI.updateHUD(state);
+          },
+          onScoreChange: function (_score, state) {
+            window.TonyArcadeUI.updateHUD(state);
+          },
+          onRunStart: function (state) {
+            window.TonyArcadeUI.closeInitialsModal();
+            window.TonyArcadeUI.renderPlanetScaleStrip(
+              state.runPlanetManifest,
+              state.nextPlanet ? state.nextPlanet.id : ''
+            );
+            window.TonyArcadeUI.updateHUD(state);
+            syncControlButtons(engine);
+          },
+          onStateChange: function (_status, state) {
+            window.TonyArcadeUI.updateHUD(state);
+            syncControlButtons(engine);
+          },
+          onGameOver: function () {
+            syncControlButtons(engine);
+          }
+        });
+
+        // Sync engine.highScore with the current leaderboard top score (0 when empty)
+        engine.highScore = window.TonyArcadeUI.getHighScore();
+
+        // Initial render of current run's randomized planet scale strip & HUD
+        window.TonyArcadeUI.renderPlanetScaleStrip(
+          engine.getRunPlanetManifest(),
+          engine.getNextPlanet() ? engine.getNextPlanet().id : ''
+        );
+        window.TonyArcadeUI.updateHUD(engine.getState());
+        syncControlButtons(engine);
+
+        // 3. Wire Toolbar & Strip Buttons
+        var btnNewRun = document.getElementById('btn-new-run');
+        if (btnNewRun) {
+          btnNewRun.addEventListener('click', function () {
+            window.TonyArcadeUI.closeInitialsModal();
+            if (engine.status === 'READY') {
+              engine.rerollPlanets();
+            } else {
+              engine.startNewRun({ jumpOnStart: false, reroll: true });
+            }
+            syncControlButtons(engine);
+            btnNewRun.blur();
+          });
+        }
+
+        var btnRerollStrip = document.getElementById('btn-reroll-strip');
+        if (btnRerollStrip) {
+          btnRerollStrip.addEventListener('click', function () {
+            engine.rerollPlanets();
+            window.TonyArcadeUI.renderPlanetScaleStrip(
+              engine.getRunPlanetManifest(),
+              engine.getNextPlanet() ? engine.getNextPlanet().id : ''
+            );
+            syncControlButtons(engine);
+            btnRerollStrip.blur();
+          });
+        }
+
+        var btnSound = document.getElementById('btn-toggle-sound');
+        if (btnSound) {
+          btnSound.addEventListener('click', function () {
+            engine.toggleMute();
+            syncControlButtons(engine);
+            btnSound.blur();
+          });
+        }
+
+        var btnHitboxes = document.getElementById('btn-toggle-hitboxes');
+        if (btnHitboxes) {
+          btnHitboxes.addEventListener('click', function () {
+            engine.toggleHitboxes();
+            syncControlButtons(engine);
+            btnHitboxes.blur();
+          });
+        }
+
+        var btnPause = document.getElementById('btn-pause');
+        if (btnPause) {
+          btnPause.addEventListener('click', function () {
+            engine.togglePause();
+            syncControlButtons(engine);
+            btnPause.blur();
+          });
+        }
+
+        var btnOpenInitials = document.getElementById('btn-open-initials');
+        if (btnOpenInitials) {
+          btnOpenInitials.addEventListener('click', function () {
+            var summary = engine.getRunSummary('MANUAL');
+            window.TonyArcadeUI.openInitialsModal(summary);
+            btnOpenInitials.blur();
+          });
+        }
+
+        // Document-level failsafe for Clear Board (#btn-reset-scores)
+        document.addEventListener('click', function (e) {
+          var resetBtn = e.target && e.target.closest ? e.target.closest('#btn-reset-scores, #reset-high-scores-btn') : null;
+          if (!resetBtn) return;
+          e.preventDefault();
+          try {
+            if (typeof localStorage !== 'undefined') {
+              localStorage.removeItem('tonys_jumping_game_highscores_v1');
+              localStorage.removeItem('tonys_jumping_game_highscores_v2');
+              localStorage.setItem('tonys_jumping_game_highscores_v3', '[]');
+            }
+          } catch (_err) {}
+          if (window.TonyArcadeUI && typeof window.TonyArcadeUI.resetHighScores === 'function') {
+            window.TonyArcadeUI.resetHighScores();
+          }
+          engine.highScore = 0;
+          var hiEl = document.getElementById('hud-high-score');
+          if (hiEl) hiEl.textContent = 'HI 000000';
+          if (typeof resetBtn.blur === 'function') resetBtn.blur();
+        });
+
+        // 4. Ensure Spacebar restarts cleanly from GAMEOVER when not typing player name,
+        //    and sync toolbar button states whenever R / M / H / P shortcuts are pressed.
+        window.addEventListener('keydown', function (e) {
+          if (isInputOrModalActive(e)) return;
+
+          var code = e.code || '';
+          var key = (e.key || '').toLowerCase();
+
+          if (code === 'Space' || key === ' ') {
+            e.preventDefault();
+            if (engine.status === 'GAMEOVER') {
+              engine.startNewRun({ jumpOnStart: true, reroll: true });
+            }
+          } else if (key === 'r' || key === 'm' || key === 'h' || key === 'p') {
+            setTimeout(function () {
+              syncControlButtons(engine);
+            }, 0);
+          }
+        }, { passive: false });
+
+        canvas.addEventListener('pointerdown', function (e) {
+          if (isInputOrModalActive(e)) return;
+          if (engine.status === 'GAMEOVER') {
+            engine.startNewRun({ jumpOnStart: true, reroll: true });
+          }
+        });
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initTonysJumpingGame);
+      } else {
+        initTonysJumpingGame();
+      }
+    })();
+  </script>
+</body>
+</html>

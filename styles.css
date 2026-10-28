@@ -1,0 +1,1004 @@
+/* ==========================================================================
+   Tony's Jumping Game — GM3 Expressive Cosmic Arcade Stylesheet (styles.css)
+   Follows Bill Skill v2.2 GM3 Token Discipline (--md-sys-color-*)
+   + Authentic Retro Arcade High-Score Cabinet Aesthetics
+   ========================================================================== */
+
+:root {
+  /* Default Cosmic Dark Mode GM3 Expressive Palette */
+  --md-sys-color-background: #0b0e17;
+  --md-sys-color-surface-container-lowest: #070910;
+  --md-sys-color-surface-container-low: #0b0e17;
+  --md-sys-color-surface: #121726;
+  --md-sys-color-surface-container: #171d30;
+  --md-sys-color-surface-container-high: #1e263d;
+  --md-sys-color-surface-container-highest: #26304d;
+
+  --md-sys-color-on-surface: #e8ecf8;
+  --md-sys-color-on-surface-variant: #9aa5c4;
+  --md-sys-color-outline: #455173;
+  --md-sys-color-outline-variant: #252e47;
+
+  --md-sys-color-primary: #7cc4ff;
+  --md-sys-color-on-primary: #002b4d;
+  --md-sys-color-primary-container: #12385e;
+  --md-sys-color-on-primary-container: #cfe6ff;
+
+  --md-sys-color-secondary: #d4b8ff;
+  --md-sys-color-secondary-container: #38265c;
+  --md-sys-color-on-secondary-container: #ecdcff;
+
+  --md-sys-color-tertiary: #ffb86c;
+  --md-sys-color-tertiary-container: #4d2f08;
+  --md-sys-color-on-tertiary-container: #ffddb8;
+
+  --md-sys-color-error: #ff8080;
+  --md-sys-color-error-container: #54161b;
+  --md-sys-color-on-error-container: #ffdada;
+
+  /* Semantic Arcade & Size Tier Accent Tokens */
+  --arcade-gold: #ffd13b;
+  --arcade-amber: #ff9e2c;
+  --arcade-cyan: #2cf0ff;
+  --arcade-magenta: #ff47b5;
+  --arcade-emerald: #3dff9e;
+  --arcade-violet: #b07cff;
+
+  --tier-mini-bg: rgba(61, 255, 158, 0.14);
+  --tier-mini-fg: #4dffaa;
+  --tier-small-bg: rgba(44, 240, 255, 0.14);
+  --tier-small-fg: #4cf2ff;
+  --tier-medium-bg: rgba(255, 209, 59, 0.15);
+  --tier-medium-fg: #ffd64f;
+  --tier-large-bg: rgba(255, 158, 44, 0.16);
+  --tier-large-fg: #ff9e2c;
+  --tier-colossal-bg: rgba(255, 71, 181, 0.18);
+  --tier-colossal-fg: #ff5ec2;
+
+  /* Typography */
+  --font-display: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+  --font-arcade: 'Press Start 2P', 'JetBrains Mono', monospace;
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+
+  /* 8px Spatial Grid Tokens */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-pill: 9999px;
+}
+
+/* Optional Light Mode Theme Support (Strict GM3 Contrast Law) */
+body.theme-light,
+[data-theme="light"] {
+  --md-sys-color-background: #f0f2f5;
+  --md-sys-color-surface-container-lowest: #ffffff;
+  --md-sys-color-surface-container-low: #f0f2f5;
+  --md-sys-color-surface: #ffffff;
+  --md-sys-color-surface-container: #f7f9fc;
+  --md-sys-color-surface-container-high: #e8ecf2;
+  --md-sys-color-surface-container-highest: #dce2ec;
+
+  --md-sys-color-on-surface: #1f1f1f;
+  --md-sys-color-on-surface-variant: #444746;
+  --md-sys-color-outline: #747745;
+  --md-sys-color-outline-variant: #c4c7c5;
+
+  --md-sys-color-primary: #0b57d0;
+  --md-sys-color-on-primary: #ffffff;
+  --md-sys-color-primary-container: #d3e3fd;
+  --md-sys-color-on-primary-container: #041e49;
+}
+
+/* ==========================================================================
+   Base Reset & Canvas Allocation
+   ========================================================================== */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background-color: var(--md-sys-color-surface-container-low);
+  color: var(--md-sys-color-on-surface);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+}
+
+.material-symbols-outlined {
+  font-family: system-ui, -apple-system, 'Segoe UI Symbol', 'Noto Color Emoji', sans-serif;
+  font-weight: 700;
+  font-style: normal;
+  font-size: 15px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+/* ==========================================================================
+   Top App Bar (Identical Surface as Page Canvas per BillSkill 1.1.3)
+   ========================================================================== */
+
+.top-app-bar,
+header.app-header,
+#top-bar {
+  background-color: var(--md-sys-color-surface-container-low);
+  border-bottom: none;
+  box-shadow: none;
+  padding: var(--space-3) var(--space-6);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  max-width: 1600px;
+  margin-inline: auto;
+}
+
+.brand-cluster {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.brand-badge {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, var(--md-sys-color-primary-container), var(--md-sys-color-secondary-container));
+  color: var(--arcade-gold);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.brand-title-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.app-title,
+h1.game-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--md-sys-color-on-surface);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.arcade-edition-pill {
+  font-family: var(--font-arcade);
+  font-size: 9px;
+  padding: 4px 8px;
+  border-radius: var(--radius-pill);
+  background-color: var(--md-sys-color-primary-container);
+  color: var(--arcade-cyan);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.app-subtitle {
+  margin: 0;
+  font-size: 12px;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+/* Action Toolbar Controls */
+.toolbar-actions,
+.control-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.btn-arcade,
+.action-btn,
+button.gm3-btn {
+  appearance: none;
+  border: none;
+  border-radius: var(--radius-pill);
+  background-color: var(--md-sys-color-surface-container-high);
+  color: var(--md-sys-color-on-surface);
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 8px 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, transform 0.1s ease, color 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-arcade:hover,
+.action-btn:hover,
+button.gm3-btn:hover {
+  background-color: var(--md-sys-color-surface-container-highest);
+}
+
+.btn-arcade:active,
+.action-btn:active,
+button.gm3-btn:active {
+  transform: translateY(1px);
+}
+
+.btn-arcade.btn-primary,
+.action-btn.primary {
+  background-color: var(--md-sys-color-primary);
+  color: var(--md-sys-color-on-primary);
+}
+
+.btn-arcade.btn-primary:hover,
+.action-btn.primary:hover {
+  filter: brightness(1.08);
+}
+
+.btn-arcade.is-active,
+.action-btn.active {
+  background-color: var(--md-sys-color-primary-container);
+  color: var(--arcade-cyan);
+}
+
+.btn-arcade.is-cleared-toast {
+  background-color: rgba(61, 255, 158, 0.18);
+  color: var(--arcade-emerald);
+}
+
+.kbd-hint {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background-color: var(--md-sys-color-surface-container-lowest);
+  color: var(--arcade-gold);
+}
+
+/* ==========================================================================
+   Main Workbench Grid: Primary Game Stage + Retro High Score Cabinet Rail
+   ========================================================================== */
+
+.arcade-workbench,
+main.game-layout,
+#app-shell {
+  max-width: 1600px;
+  margin-inline: auto;
+  padding: 0 var(--space-6) var(--space-6);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 430px;
+  gap: var(--space-5);
+  align-items: start;
+}
+
+@media (max-width: 1180px) {
+  .arcade-workbench,
+  main.game-layout,
+  #app-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.stage-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.cabinet-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+/* Surface Cards (Tonal Hierarchy, Zero Hard Container Borders) */
+.gm3-card,
+.surface-card,
+.hud-panel,
+.planet-strip-card,
+.arcade-cabinet-card {
+  background-color: var(--md-sys-color-surface);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  border: none;
+}
+
+/* ==========================================================================
+   Live Arcade HUD Ribbon (Score, HI Score, Streak, Planets Cleared, Speed)
+   ========================================================================== */
+
+.hud-ribbon,
+#arcade-hud {
+  background-color: var(--md-sys-color-surface);
+  border-radius: var(--radius-lg);
+  padding: var(--space-3) var(--space-4);
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--space-3);
+  align-items: center;
+}
+
+@media (max-width: 860px) {
+  .hud-ribbon,
+  #arcade-hud {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.hud-metric {
+  background-color: var(--md-sys-color-surface-container);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.hud-metric-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--md-sys-color-on-surface-variant);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hud-metric-value {
+  font-family: var(--font-arcade);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--md-sys-color-on-surface);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hud-metric-value.score-primary,
+#hud-score {
+  color: var(--arcade-gold);
+  text-shadow: 0 0 10px rgba(255, 209, 59, 0.35);
+}
+
+.hud-metric-value.score-hi,
+#hud-high-score {
+  color: var(--arcade-cyan);
+  text-shadow: 0 0 10px rgba(44, 240, 255, 0.3);
+}
+
+.hud-metric-value.streak-hot,
+#hud-streak {
+  color: var(--arcade-emerald);
+}
+
+.hud-metric-value.speed-mach,
+#hud-speed {
+  color: var(--arcade-amber);
+}
+
+.hud-metric-value.next-planet,
+#hud-next-planet {
+  font-family: var(--font-display);
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--arcade-magenta);
+}
+
+/* ==========================================================================
+   Primary Game Viewport (#game-canvas-container)
+   ========================================================================== */
+
+#game-canvas-container,
+.canvas-stage-wrapper {
+  position: relative;
+  width: 100%;
+  background-color: var(--md-sys-color-surface-container-lowest);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 380px;
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.65);
+}
+
+#game-canvas,
+#game-canvas-container canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 520px;
+  aspect-ratio: 16 / 9;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* On-Canvas Controls Legend Bar */
+.stage-controls-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: 10px 14px;
+  background-color: var(--md-sys-color-surface);
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.control-pill-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.control-hint-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ==========================================================================
+   Current Run Randomized Planet Scale Strip (#planet-scale-strip)
+   ========================================================================== */
+
+.planet-strip-card,
+#planet-radar-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.section-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.section-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--md-sys-color-on-surface);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-subtitle {
+  font-size: 12px;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+#planet-scale-strip,
+.planet-scale-grid {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+@media (max-width: 1360px) {
+  #planet-scale-strip,
+  .planet-scale-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  #planet-scale-strip,
+  .planet-scale-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.planet-seed-card {
+  background-color: var(--md-sys-color-surface-container);
+  border-radius: var(--radius-md);
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  position: relative;
+  transition: transform 0.15s ease, background-color 0.15s ease;
+  min-width: 0;
+}
+
+.planet-seed-card.is-upcoming {
+  background-color: var(--md-sys-color-surface-container-highest);
+  outline: 2px solid var(--arcade-cyan);
+  outline-offset: -2px;
+}
+
+.planet-seed-card.is-cleared {
+  background-color: var(--md-sys-color-surface-container-high);
+}
+
+.planet-orb-preview {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.planet-orb-circle {
+  border-radius: 50%;
+  display: inline-block;
+  position: relative;
+  box-shadow: inset -4px -4px 8px rgba(0, 0, 0, 0.55), 0 0 10px rgba(255, 255, 255, 0.12);
+}
+
+.planet-orb-circle.has-rings::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -32%;
+  width: 164%;
+  height: 36%;
+  border: 2px solid rgba(255, 224, 150, 0.75);
+  border-radius: 50%;
+  transform: translateY(-50%) rotate(-18deg);
+  pointer-events: none;
+}
+
+.planet-seed-name {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--md-sys-color-on-surface);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.planet-seed-points {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--arcade-gold);
+}
+
+.planet-seed-radius {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+/* 5-Tier Size Badge System */
+.tier-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+}
+
+.tier-badge.tier-MINI {
+  background-color: var(--tier-mini-bg);
+  color: var(--tier-mini-fg);
+}
+
+.tier-badge.tier-SMALL {
+  background-color: var(--tier-small-bg);
+  color: var(--tier-small-fg);
+}
+
+.tier-badge.tier-MEDIUM {
+  background-color: var(--tier-medium-bg);
+  color: var(--tier-medium-fg);
+}
+
+.tier-badge.tier-LARGE {
+  background-color: var(--tier-large-bg);
+  color: var(--tier-large-fg);
+}
+
+.tier-badge.tier-COLOSSAL {
+  background-color: var(--tier-colossal-bg);
+  color: var(--tier-colossal-fg);
+}
+
+/* Scoring Tier Reference Strip */
+.scoring-tier-legend {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+}
+
+.scoring-tier-pill {
+  background-color: var(--md-sys-color-surface-container);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+}
+
+/* ==========================================================================
+   Retro Arcade High Score Cabinet Table (#high-score-cabinet)
+   ========================================================================== */
+
+.arcade-cabinet-card,
+#high-score-cabinet {
+  background-color: var(--md-sys-color-surface-container-lowest);
+  border-radius: var(--radius-xl);
+  padding: var(--space-4);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  box-shadow: inset 0 0 32px rgba(44, 240, 255, 0.05);
+}
+
+.arcade-marquee-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-bottom: var(--space-2);
+  position: relative;
+}
+
+.arcade-marquee-title {
+  margin: 0;
+  font-family: var(--font-arcade);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--arcade-gold);
+  text-shadow: 0 0 12px rgba(255, 209, 59, 0.45);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.arcade-marquee-sub {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--arcade-cyan);
+  margin-top: 2px;
+}
+
+.arcade-table-wrapper {
+  position: relative;
+  width: 100%;
+  overflow-x: auto;
+}
+
+.arcade-score-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 4px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+}
+
+.arcade-score-table th {
+  text-align: left;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--md-sys-color-on-surface-variant);
+  padding: 4px 6px;
+  white-space: nowrap;
+}
+
+.arcade-score-table th.num-col,
+.arcade-score-table td.num-col {
+  text-align: right;
+}
+
+.arcade-score-row {
+  background-color: var(--md-sys-color-surface);
+  transition: background-color 0.15s ease;
+}
+
+.arcade-score-row td {
+  padding: 7px 6px;
+  vertical-align: middle;
+}
+
+.arcade-score-row td:first-child {
+  border-top-left-radius: var(--radius-sm);
+  border-bottom-left-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+
+.arcade-score-row td:last-child {
+  border-top-right-radius: var(--radius-sm);
+  border-bottom-right-radius: var(--radius-sm);
+}
+
+/* Classic Arcade Rank Color Coding (1ST Gold, 2ND Cyan, 3RD Magenta, 4TH-10TH) */
+.arcade-score-row.rank-1 {
+  background-color: rgba(255, 209, 59, 0.12);
+  color: var(--arcade-gold);
+  font-weight: 700;
+}
+
+.arcade-score-row.rank-2 {
+  background-color: rgba(44, 240, 255, 0.1);
+  color: var(--arcade-cyan);
+  font-weight: 700;
+}
+
+.arcade-score-row.rank-3 {
+  background-color: rgba(255, 71, 181, 0.1);
+  color: var(--arcade-magenta);
+  font-weight: 700;
+}
+
+.arcade-score-row.is-current-session {
+  outline: 1.5px solid var(--arcade-emerald);
+  outline-offset: -1.5px;
+}
+
+.rank-cell {
+  font-family: var(--font-arcade);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.player-name-cell,
+.initials-cell {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--md-sys-color-on-surface);
+  word-break: break-word;
+}
+
+.rank-1 .player-name-cell,
+.rank-1 .initials-cell { color: var(--arcade-gold); }
+.rank-2 .player-name-cell,
+.rank-2 .initials-cell { color: var(--arcade-cyan); }
+.rank-3 .player-name-cell,
+.rank-3 .initials-cell { color: var(--arcade-magenta); }
+
+.score-cell {
+  font-family: var(--font-arcade);
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.biggest-planet-cell {
+  font-size: 11px;
+  color: var(--md-sys-color-on-surface-variant);
+  white-space: nowrap;
+}
+
+.arcade-cabinet-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  position: relative;
+}
+
+/* ==========================================================================
+   Full Player Name Entry Modal / Overlay (#initials-modal)
+   ========================================================================== */
+
+.arcade-initials-overlay,
+#initials-modal {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(7, 9, 16, 0.82);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  z-index: 1000;
+}
+
+.arcade-initials-overlay[hidden],
+#initials-modal[hidden],
+.arcade-initials-overlay.is-hidden,
+#initials-modal.is-hidden {
+  display: none !important;
+}
+
+.arcade-initials-dialog {
+  background-color: var(--md-sys-color-surface);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  max-width: 460px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-4);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.75);
+}
+
+.initials-header-badge {
+  font-family: var(--font-arcade);
+  font-size: 11px;
+  color: var(--arcade-gold);
+  background-color: rgba(255, 209, 59, 0.14);
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  letter-spacing: 0.06em;
+}
+
+.initials-dialog-title {
+  margin: 0;
+  font-family: var(--font-arcade);
+  font-size: 17px;
+  line-height: 1.4;
+  color: var(--arcade-cyan);
+  text-shadow: 0 0 14px rgba(44, 240, 255, 0.4);
+}
+
+.initials-run-summary {
+  width: 100%;
+  background-color: var(--md-sys-color-surface-container);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.summary-stat-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.summary-stat-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.summary-stat-val {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--md-sys-color-on-surface);
+}
+
+/* Full Player Name Input Box */
+.player-name-field-group {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  margin: var(--space-1) 0;
+}
+
+.player-name-field-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--md-sys-color-on-surface-variant);
+  text-align: left;
+}
+
+.arcade-name-input,
+#arcade-player-name-input {
+  width: 100%;
+  height: 48px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background-color: var(--md-sys-color-surface-container-lowest);
+  color: var(--arcade-gold);
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border: none;
+  outline: 2px solid var(--md-sys-color-outline-variant);
+  transition: outline-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.arcade-name-input::placeholder,
+#arcade-player-name-input::placeholder {
+  color: var(--md-sys-color-on-surface-variant);
+  font-weight: 500;
+  opacity: 0.7;
+}
+
+.arcade-name-input:focus,
+#arcade-player-name-input:focus {
+  outline: 2.5px solid var(--arcade-cyan);
+  box-shadow: 0 0 16px rgba(44, 240, 255, 0.25);
+}
+
+.initials-dialog-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  width: 100%;
+}
+
+/* Run Telemetry & Recent Jumps Log Card */
+.telemetry-feed-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.telemetry-feed-item {
+  background-color: var(--md-sys-color-surface-container);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-size: 12px;
+}
+
+.telemetry-planet-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.telemetry-points-tag {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--arcade-emerald);
+}
