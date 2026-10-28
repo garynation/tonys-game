@@ -1,15 +1,20 @@
 /**
- * Tony's Jumping Game — Retro Arcade High-Score Cabinet, Full Player Name Entry & Live HUD
+ * Galactic Sheep — Centralised Server-Backed Multi-Player Arcade Leaderboard,
+ * Full Player Name Entry, Collectible Stars Guide & Live HUD
  * Exposes window.TonyArcadeUI
  */
 (function (global) {
   'use strict';
 
   const STORAGE_KEY = 'tonys_jumping_game_highscores_v3';
+  const PLAYER_NAME_STORAGE_KEY = 'galactic_sheep_player_name';
+  const API_URL = '/api/leaderboard';
+
   const LEGACY_STORAGE_KEYS = [
     'tonys_jumping_game_highscores_v1',
     'tonys_jumping_game_highscores_v2'
   ];
+
   const LEGACY_SEED_SIGNATURES = new Set([
     'TNY:14850',
     'SHP:11400',
@@ -23,6 +28,7 @@
     'WOOL:3450',
     'SOL:2100'
   ]);
+
   const MAX_LEADERBOARD_ROWS = 10;
   const MAX_NAME_LENGTH = 24;
 
@@ -50,9 +56,75 @@
     { id: 'neptune', name: 'Neptune', tier: 'LARGE',    radius: 49, points: 600,  baseColor: '#3b5bdb', accentColor: '#748ffc', hasRings: false }
   ];
 
-  /**
-   * Starts with NO pre-seeded scores so the leaderboard begins completely clean (0 entries).
-   */
+  const DEFAULT_STAR_CATALOG_FALLBACK = [
+    {
+      id: 'GOLD_SUPERNOVA',
+      name: 'Gold Supernova',
+      category: 'positive',
+      color: '#FFD700',
+      radius: 22,
+      sizeLabel: 'LARGE',
+      scoreDelta: 500,
+      shortTag: '+500 PTS',
+      description: 'Instant +500 bonus points!'
+    },
+    {
+      id: 'CYAN_PULSAR',
+      name: 'Cyan Pulsar',
+      category: 'positive',
+      color: '#00E5FF',
+      radius: 18,
+      sizeLabel: 'MEDIUM',
+      scoreDelta: 250,
+      shortTag: 'HIGH JUMP',
+      description: 'Higher jumps (+25% apex) for 10s & +250 pts!'
+    },
+    {
+      id: 'EMERALD_QUASAR',
+      name: 'Emerald Quasar',
+      category: 'positive',
+      color: '#2ECC71',
+      radius: 14,
+      sizeLabel: 'MINI',
+      scoreDelta: 300,
+      shortTag: 'MINI + WIDE GAP',
+      description: 'Makes Tony smaller (0.68x) & widens planet gaps (+30%) for 10s!'
+    },
+    {
+      id: 'CRIMSON_DWARF',
+      name: 'Crimson Dwarf',
+      category: 'negative',
+      color: '#FF3366',
+      radius: 21,
+      sizeLabel: 'LARGE',
+      scoreDelta: -150,
+      shortTag: 'BIG SHEEP + TIGHT GAP',
+      description: 'Makes Tony bigger (1.38x), narrows planet gaps (-10%), & -150 pts!'
+    },
+    {
+      id: 'VIOLET_NOVA',
+      name: 'Violet Hazard Nova',
+      category: 'negative',
+      color: '#C77DFF',
+      radius: 26,
+      sizeLabel: 'COLOSSAL',
+      scoreDelta: -300,
+      shortTag: '5x GIANT PLANETS -300',
+      description: 'Next 5 planets in a row grow larger (+32%) & loses 300 pts!'
+    },
+    {
+      id: 'AMBER_ECLIPSE',
+      name: 'Amber Eclipse',
+      category: 'negative',
+      color: '#FF7B00',
+      radius: 16,
+      sizeLabel: 'SMALL',
+      scoreDelta: -200,
+      shortTag: 'TIGHT GAPS -200',
+      description: 'Narrows planet gaps slightly (-9%) for 8s & loses 200 pts!'
+    }
+  ];
+
   const DEFAULT_SEED_SCORES = [];
 
   // Internal state
@@ -60,12 +132,17 @@
     scores: [],
     bestSessionScore: 0,
     lastSubmittedId: null,
+    pendingRunEntryId: null,
     isTypingInitials: false,
     playerName: '',
     pendingRunStats: null,
     onInitialsSaved: null,
     recentClears: [],
     lastManifestSignature: '',
+    lastEffectsSignature: '',
+    lastSeenRunId: -1,
+    serverOnline: false,
+    pollTimer: null,
     resetToastTimer: null
   };
 
@@ -83,9 +160,6 @@
       .replace(/'/g, '&#39;');
   }
 
-  /**
-   * Normalizes a full player name (up to 24 characters, preserving spaces and case).
-   */
   function normalizePlayerName(raw) {
     const cleaned = String(raw ?? '')
       .replace(/[\r\n\t]+/g, ' ')
@@ -93,6 +167,31 @@
       .trim()
       .slice(0, MAX_NAME_LENGTH);
     return cleaned || 'Anonymous Sheep';
+  }
+
+  function loadRememberedPlayerName() {
+    if (state.playerName) return state.playerName;
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const saved = localStorage.getItem(PLAYER_NAME_STORAGE_KEY);
+        if (saved && saved.trim()) {
+          state.playerName = saved.trim().slice(0, MAX_NAME_LENGTH);
+          return state.playerName;
+        }
+      }
+    } catch (_err) {}
+    return '';
+  }
+
+  function saveRememberedPlayerName(name) {
+    const clean = String(name ?? '').trim().slice(0, MAX_NAME_LENGTH);
+    if (!clean) return;
+    state.playerName = clean;
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(PLAYER_NAME_STORAGE_KEY, clean);
+      }
+    } catch (_err) {}
   }
 
   function formatBiggestPlanet(bp, fallbackObj) {
@@ -137,9 +236,11 @@
       rank: idx + 1,
       name: fullName,
       playerName: fullName,
-      initials: fullName, // Alias kept for compatibility with any caller reading .initials
+      initials: fullName,
       score: Math.max(0, Math.floor(Number(entry.score) || 0)),
       planetsCleared: Math.max(0, Math.floor(Number(entry.planetsCleared) || 0)),
+      perfectJumps: Math.max(0, Math.floor(Number(entry.perfectJumps) || 0)),
+      starsCollected: Math.max(0, Math.floor(Number(entry.starsCollected) || 0)),
       biggestPlanet: {
         name: bp.name,
         diameter: bp.diameter,
@@ -153,9 +254,14 @@
   }
 
   function sortAndRankScores(list) {
-    return (Array.isArray(list) ? list : [])
-      .filter((item) => !isLegacySeedEntry(item))
-      .slice()
+    const dedupMap = new Map();
+    for (const raw of (Array.isArray(list) ? list : [])) {
+      if (isLegacySeedEntry(raw)) continue;
+      const norm = normalizeScoreEntry(raw);
+      if (norm.score <= 0) continue;
+      dedupMap.set(norm.id, norm);
+    }
+    return Array.from(dedupMap.values())
       .sort((a, b) => {
         if (b.score !== a.score) return b.score - a.score;
         return (b.planetsCleared || 0) - (a.planetsCleared || 0);
@@ -183,7 +289,7 @@
           const parsed = JSON.parse(raw);
           if (Array.isArray(parsed)) {
             const filtered = parsed.filter((item) => !isLegacySeedEntry(item));
-            state.scores = sortAndRankScores(filtered.map(normalizeScoreEntry));
+            state.scores = sortAndRankScores(filtered);
             if (filtered.length !== parsed.length) {
               localStorage.setItem(STORAGE_KEY, JSON.stringify(state.scores));
             }
@@ -194,9 +300,7 @@
         localStorage.setItem(STORAGE_KEY, '[]');
         return state.scores;
       }
-    } catch (_err) {
-      // Ignore storage access errors in restricted contexts
-    }
+    } catch (_err) {}
     if (!Array.isArray(state.scores)) {
       state.scores = [];
     }
@@ -204,6 +308,9 @@
   }
 
   function getHighScores() {
+    if (Array.isArray(state.scores) && state.scores.length > 0) {
+      return state.scores.slice();
+    }
     if (typeof localStorage !== 'undefined') {
       return loadHighScores();
     }
@@ -217,9 +324,7 @@
         purgeLegacyStorageKeys();
         localStorage.setItem(STORAGE_KEY, JSON.stringify(state.scores));
       }
-    } catch (_err) {
-      // Ignore quota/storage errors in restricted contexts
-    }
+    } catch (_err) {}
     return state.scores;
   }
 
@@ -236,12 +341,125 @@
     }
   }
 
+  function canUseServerApi() {
+    if (typeof fetch !== 'function') return false;
+    if (typeof location !== 'undefined' && location.protocol === 'file:') return false;
+    return true;
+  }
+
+  function updateServerStatusBadge(online) {
+    state.serverOnline = Boolean(online);
+    if (typeof document === 'undefined') return;
+    const badge = byId('server-sync-badge');
+    if (badge) {
+      badge.textContent = state.serverOnline ? 'LIVE SERVER SYNC' : 'LOCAL STORAGE';
+    }
+  }
+
   /**
-   * Immediately clears all high scores to empty ([]) without window.confirm blocking,
-   * resets HI 000000 to 000000, re-renders the empty 10-slot table, and shows visual feedback.
+   * Centralised Server Leaderboard Fetch (GET /api/leaderboard)
+   * Called automatically on init, at the start of every game run, and every 4s.
+   */
+  async function fetchServerLeaderboard() {
+    if (!canUseServerApi()) {
+      return getHighScores();
+    }
+    try {
+      const resp = await fetch(API_URL, {
+        method: 'GET',
+        cache: 'no-store',
+        headers: { 'Accept': 'application/json' }
+      });
+      if (!resp.ok) {
+        return getHighScores();
+      }
+      const data = await resp.json();
+      if (data && Array.isArray(data.scores)) {
+        updateServerStatusBadge(true);
+        const serverScores = saveHighScores(data.scores);
+        const activeEngineScore =
+          (global.gameEngine && global.gameEngine.isPlaying && global.gameEngine.score) || 0;
+        if (serverScores.length === 0 && activeEngineScore === 0) {
+          state.bestSessionScore = 0;
+        }
+        const top = Math.max(
+          serverScores.length > 0 ? serverScores[0].score : 0,
+          activeEngineScore
+        );
+        syncEngineHighScore(top);
+        renderHighScoreTable(serverScores);
+        updateHighScoreDisplay(activeEngineScore, serverScores.length === 0 && activeEngineScore === 0);
+        return serverScores;
+      }
+    } catch (_err) {
+      updateServerStatusBadge(false);
+    }
+    return getHighScores();
+  }
+
+  async function postScoreToServer(entryObj) {
+    if (!canUseServerApi()) return null;
+    try {
+      const resp = await fetch(API_URL, {
+        method: 'POST',
+        cache: 'no-store',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(entryObj)
+      });
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      if (data && Array.isArray(data.scores)) {
+        updateServerStatusBadge(true);
+        const serverScores = saveHighScores(data.scores);
+        syncEngineHighScore(getTopScore());
+        renderHighScoreTable(serverScores);
+        updateHighScoreDisplay();
+        return data;
+      }
+    } catch (_err) {}
+    return null;
+  }
+
+  async function clearServerLeaderboard() {
+    if (!canUseServerApi()) return false;
+    try {
+      const resp = await fetch(API_URL, {
+        method: 'DELETE',
+        cache: 'no-store',
+        headers: { 'Accept': 'application/json' }
+      });
+      if (resp.ok) return true;
+    } catch (_err) {}
+    try {
+      const resp2 = await fetch(`${API_URL}/clear`, {
+        method: 'POST',
+        cache: 'no-store',
+        headers: { 'Accept': 'application/json' }
+      });
+      return resp2.ok;
+    } catch (_err) {}
+    return false;
+  }
+
+  function startServerPolling(intervalMs = 4000) {
+    if (typeof window === 'undefined' || !canUseServerApi()) return;
+    if (state.pollTimer) clearInterval(state.pollTimer);
+    state.pollTimer = setInterval(() => {
+      if (!state.isTypingInitials) {
+        fetchServerLeaderboard();
+      }
+    }, intervalMs);
+  }
+
+  /**
+   * Immediately clears all high scores locally AND on the centralized server (/api/leaderboard)
    */
   function resetHighScores() {
     state.lastSubmittedId = null;
+    state.pendingRunEntryId = null;
     state.bestSessionScore = 0;
     state.scores = [];
     saveHighScores([]);
@@ -249,6 +467,8 @@
 
     renderHighScoreTable([]);
     updateHighScoreDisplay(0, true);
+
+    const clearPromise = clearServerLeaderboard();
 
     if (typeof document !== 'undefined') {
       const resetBtn = byId('btn-reset-scores', 'reset-high-scores-btn');
@@ -269,7 +489,9 @@
     if (global.TONY_ASSETS && global.TONY_ASSETS.TONY_AUDIO && typeof global.TONY_ASSETS.TONY_AUDIO.playButton === 'function') {
       global.TONY_ASSETS.TONY_AUDIO.playButton();
     }
-    return state.scores;
+    const result = state.scores;
+    result.serverPromise = clearPromise;
+    return result;
   }
 
   function getTopScore() {
@@ -305,6 +527,11 @@
     return byId('arcade-player-name-input', 'arcade-initials-input', 'initials-hidden-input');
   }
 
+  /**
+   * Submits or updates a score entry both locally and on POST /api/leaderboard.
+   * If `entry.id` matches an existing entry (e.g. auto-saved at Game Over and then updated
+   * with the player's entered name in the modal), updates it in-place without duplicating.
+   */
   function submitScore(entry = {}) {
     if (!Array.isArray(state.scores)) {
       loadHighScores();
@@ -314,14 +541,18 @@
       entry.name ??
       entry.playerName ??
       entry.initials ??
-      (inputEl && inputEl.value ? inputEl.value : state.playerName) ??
+      (inputEl && inputEl.value ? inputEl.value : loadRememberedPlayerName()) ??
       'Anonymous Sheep';
 
+    const entryId = entry.id || state.pendingRunEntryId || `player-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
     const newEntry = normalizeScoreEntry({
-      id: `player-${Date.now()}`,
+      id: entryId,
       name: rawName,
       score: entry.score,
       planetsCleared: entry.planetsCleared,
+      perfectJumps: entry.perfectJumps,
+      starsCollected: entry.starsCollected,
       biggestPlanet: entry.biggestPlanet,
       biggestPlanetObj: entry.biggestPlanetObj,
       date: entry.date || new Date().toISOString().slice(0, 10),
@@ -329,26 +560,32 @@
       isSeed: false
     });
 
-    state.playerName = newEntry.name;
+    if (rawName && rawName.trim() && rawName.trim() !== 'Anonymous Sheep') {
+      saveRememberedPlayerName(newEntry.name);
+    }
 
     if (newEntry.score > state.bestSessionScore) {
       state.bestSessionScore = newEntry.score;
     }
     state.lastSubmittedId = newEntry.id;
 
-    const combined = state.scores.concat([newEntry]);
+    const withoutSameId = state.scores.filter((item) => item.id !== newEntry.id);
+    const combined = newEntry.score > 0 ? withoutSameId.concat([newEntry]) : withoutSameId;
     const updated = saveHighScores(combined);
     const savedRecord = updated.find((item) => item.id === newEntry.id) || null;
 
     syncEngineHighScore(getTopScore());
-    renderHighScoreTable();
+    renderHighScoreTable(updated);
     updateHighScoreDisplay(newEntry.score);
+
+    const serverPromise = newEntry.score > 0 ? postScoreToServer(newEntry) : Promise.resolve(null);
 
     return {
       madeTop10: Boolean(savedRecord),
       rank: savedRecord ? savedRecord.rank : null,
       entry: savedRecord || newEntry,
-      scores: updated
+      scores: updated,
+      serverPromise
     };
   }
 
@@ -378,7 +615,6 @@
       ? sortAndRankScores(customScores)
       : state.scores;
 
-    // Ensure table header says PLAYER instead of INIT
     const table = byId('high-score-table');
     if (table) {
       const ths = table.querySelectorAll('thead th');
@@ -487,10 +723,122 @@
   }
 
   /**
+   * Renders the 6 Surprise Floating Collectible Stars Guide (#star-legend-grid)
+   */
+  function renderStarLegend(customCatalog) {
+    if (typeof document === 'undefined') return;
+    const container = byId('star-legend-grid', 'star-collectibles-grid');
+    if (!container) return;
+
+    const rawCatalog =
+      customCatalog ||
+      (global.TONY_ASSETS && global.TONY_ASSETS.STAR_CATALOG) ||
+      global.STAR_CATALOG ||
+      DEFAULT_STAR_CATALOG_FALLBACK;
+
+    const list = Array.isArray(rawCatalog)
+      ? rawCatalog
+      : Object.values(rawCatalog || {});
+
+    const items = list.length > 0 ? list : DEFAULT_STAR_CATALOG_FALLBACK;
+
+    container.innerHTML = items.map((star) => {
+      const isPos = String(star.category || '').toLowerCase() === 'positive' || Number(star.scoreDelta) > 0;
+      const cardClass = isPos ? 'star-card-positive' : 'star-card-negative';
+      const badgeClass = isPos ? 'tier-MINI' : 'tier-COLOSSAL';
+      const signLabel = isPos ? 'POSITIVE STAR' : 'HAZARD STAR';
+      const color = star.color || (isPos ? '#FFD700' : '#FF3366');
+      const shortTag = star.shortTag || (star.scoreDelta > 0 ? `+${star.scoreDelta} PTS` : `${star.scoreDelta} PTS`);
+      return `
+        <div class="star-legend-card ${cardClass}" data-star-id="${escapeHtml(star.id || star.name)}">
+          <div class="star-icon-swatch" style="color:${escapeHtml(color)};text-shadow:0 0 10px ${escapeHtml(color)};">★</div>
+          <div class="star-card-body">
+            <div class="star-card-title-row">
+              <span class="star-card-name">${escapeHtml(star.name)}</span>
+              <span class="tier-badge ${badgeClass}">${escapeHtml(shortTag)}</span>
+            </div>
+            <div class="star-card-desc">
+              <strong>${signLabel} (${escapeHtml(star.sizeLabel || 'R:' + star.radius + 'px')}):</strong>
+              ${escapeHtml(star.description || '')}
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  /**
+   * Renders active star modifiers, enlarged planet surges & perfect jump counts into #active-effects-strip
+   */
+  function renderActiveEffects(hudState = {}) {
+    if (typeof document === 'undefined') return;
+    const strip = byId('active-effects-strip');
+    if (!strip) return;
+
+    const pills = [];
+    const perfectJumps = Math.max(0, Math.floor(Number(hudState.perfectJumps) || 0));
+    const starsCollected = Math.max(0, Math.floor(Number(hudState.starsCollected) || 0));
+
+    pills.push(
+      `<span class="active-effect-pill is-gold">⚡ Perfect Jumps: ${perfectJumps}</span>`
+    );
+    pills.push(
+      `<span class="active-effect-pill is-neutral">★ Stars Collected: ${starsCollected}</span>`
+    );
+
+    const effectsList = Array.isArray(hudState.activeEffects) ? hudState.activeEffects : [];
+    for (const eff of effectsList) {
+      if (!eff) continue;
+      const isNeg = String(eff.category || eff.polarity || '').toLowerCase() === 'negative' || Boolean(eff.isNegative);
+      const pillClass = isNeg ? 'is-negative' : 'is-positive';
+      const label = eff.label || eff.name || eff.shortTag || eff.type || 'Star Effect';
+      const rem = eff.remainingSec
+        ? ` (${Number(eff.remainingSec).toFixed(1)}s)`
+        : eff.remainingCount
+        ? ` (${eff.remainingCount} left)`
+        : '';
+      pills.push(
+        `<span class="active-effect-pill ${pillClass}">${escapeHtml(label)}${escapeHtml(rem)}</span>`
+      );
+    }
+
+    const enlargedRem = Math.max(0, Math.floor(Number(hudState.enlargedPlanetsRemaining) || 0));
+    if (enlargedRem > 0 && !effectsList.some((e) => e && e.type === 'FIVE_BIGGER_PLANETS')) {
+      pills.push(
+        `<span class="active-effect-pill is-negative">🪐 Giant Planet Surge: ${enlargedRem} left</span>`
+      );
+    }
+
+    const tonyScale = Number(hudState.tonyScale || 1.0);
+    if (tonyScale < 0.95 && effectsList.length === 0) {
+      pills.push(`<span class="active-effect-pill is-positive">🐑 Mini Sheep (${tonyScale.toFixed(2)}x) & Wider Gaps</span>`);
+    } else if (tonyScale > 1.05 && effectsList.length === 0) {
+      pills.push(`<span class="active-effect-pill is-negative">🐑 Giant Sheep (${tonyScale.toFixed(2)}x) & Tighter Gaps</span>`);
+    }
+
+    const jumpMult = Number(hudState.jumpBoostMultiplier || 1.0);
+    if (jumpMult > 1.05 && effectsList.length === 0) {
+      pills.push(`<span class="active-effect-pill is-positive">🚀 High Jump Boost (${jumpMult.toFixed(2)}x)</span>`);
+    }
+
+    const sig = pills.join('|');
+    if (sig !== state.lastEffectsSignature) {
+      state.lastEffectsSignature = sig;
+      strip.innerHTML = pills.join('');
+    }
+  }
+
+  /**
    * Live HUD Updater called on animation frames or state transitions
    */
   function updateHUD(hudState = {}) {
     if (typeof document === 'undefined') return;
+
+    // Automatically sync centralized leaderboard whenever a new game run begins
+    if (typeof hudState.runId === 'number' && hudState.runId !== state.lastSeenRunId) {
+      state.lastSeenRunId = hudState.runId;
+      fetchServerLeaderboard();
+    }
 
     const score = Math.max(0, Math.floor(Number(hudState.score) || 0));
     if (score > state.bestSessionScore) {
@@ -508,6 +856,18 @@
     if (clearedEl) {
       const count = Math.max(0, Math.floor(Number(hudState.planetsCleared ?? hudState.clearedCount) || 0));
       clearedEl.textContent = String(count);
+    }
+
+    const perfectEl = byId('hud-perfect-jumps', 'perfect-jumps-value');
+    if (perfectEl) {
+      const pCount = Math.max(0, Math.floor(Number(hudState.perfectJumps) || 0));
+      perfectEl.textContent = String(pCount);
+    }
+
+    const starsEl = byId('hud-stars-collected', 'stars-collected-value');
+    if (starsEl) {
+      const sCount = Math.max(0, Math.floor(Number(hudState.starsCollected) || 0));
+      starsEl.textContent = String(sCount);
     }
 
     const streakEl = byId('hud-streak', 'streak-value', 'hud-multiplier');
@@ -536,6 +896,8 @@
       }
     }
 
+    renderActiveEffects(hudState);
+
     const manifest = hudState.planetManifest || hudState.runPlanetManifest || hudState.manifest;
     if (Array.isArray(manifest) && manifest.length > 0) {
       const nextId = (hudState.nextPlanet && hudState.nextPlanet.id) || hudState.nextPlanetId || '';
@@ -547,37 +909,82 @@
     }
   }
 
-  /**
-   * Logs a planet clearance event into the live telemetry feed
-   */
-  function logPlanetClear(clearEvent = {}) {
+  function renderTelemetryFeed() {
     if (typeof document === 'undefined') return;
     const listEl = byId('telemetry-feed-list', 'run-telemetry-list');
     if (!listEl) return;
 
+    listEl.innerHTML = state.recentClears.map((item) => {
+      const ptsClass = item.isNegative ? 'telemetry-points-tag is-negative' : 'telemetry-points-tag';
+      const ptsPrefix = item.points >= 0 ? `+${item.points} PTS` : `${item.points} PTS`;
+      return `
+        <li class="telemetry-feed-item">
+          <span class="telemetry-planet-tag">
+            <span class="tier-badge ${escapeHtml(item.badgeClass || 'tier-MEDIUM')}">${escapeHtml(item.badgeText || 'EVENT')}</span>
+            <span>${escapeHtml(item.title)}</span>
+            ${item.extraBadge ? `<span class="tier-badge tier-COLOSSAL">${escapeHtml(item.extraBadge)}</span>` : ''}
+          </span>
+          <span class="${ptsClass}">${escapeHtml(ptsPrefix)}</span>
+        </li>
+      `;
+    }).join('');
+  }
+
+  function logPlanetClear(clearEvent = {}) {
     const name = clearEvent.name || clearEvent.planetName || 'Planet';
     const tier = String(clearEvent.tier || clearEvent.sizeTier || 'MEDIUM').toUpperCase();
     const points = Math.round(Number(clearEvent.points || clearEvent.bonus || 100));
     const radius = Math.round(Number(clearEvent.radius || 30));
     const closeCall = Boolean(clearEvent.closeCall);
 
-    state.recentClears.unshift({ name, tier, points, radius, closeCall });
-    state.recentClears = state.recentClears.slice(0, 5);
+    state.recentClears.unshift({
+      badgeClass: `tier-${tier}`,
+      badgeText: tier,
+      title: `${name} (R:${radius}px)`,
+      extraBadge: closeCall ? 'CLOSE CALL!' : '',
+      points,
+      isNegative: false
+    });
+    state.recentClears = state.recentClears.slice(0, 6);
+    renderTelemetryFeed();
+  }
 
-    listEl.innerHTML = state.recentClears.map((item) => `
-      <li class="telemetry-feed-item">
-        <span class="telemetry-planet-tag">
-          <span class="tier-badge tier-${escapeHtml(item.tier)}">${escapeHtml(item.tier)}</span>
-          <span>${escapeHtml(item.name)} (R:${item.radius}px)</span>
-          ${item.closeCall ? '<span class="tier-badge tier-COLOSSAL">CLOSE CALL!</span>' : ''}
-        </span>
-        <span class="telemetry-points-tag">+${item.points} PTS</span>
-      </li>
-    `).join('');
+  function logPerfectJump(jumpEvent = {}) {
+    const planetName = jumpEvent.planetName || (jumpEvent.planet && jumpEvent.planet.name) || 'Planet';
+    const bonus = Math.round(Number(jumpEvent.bonus || jumpEvent.points || 200));
+    state.recentClears.unshift({
+      badgeClass: 'tier-MEDIUM',
+      badgeText: 'PERFECT JUMP',
+      title: `Optimal Launch Window · ${planetName}`,
+      extraBadge: '',
+      points: bonus,
+      isNegative: false
+    });
+    state.recentClears = state.recentClears.slice(0, 6);
+    renderTelemetryFeed();
+  }
+
+  function logStarCollected(starEvent = {}) {
+    const name = starEvent.name || starEvent.starName || 'Cosmic Star';
+    const delta = Math.round(Number(starEvent.scoreDelta ?? starEvent.points ?? 0));
+    const isNeg = String(starEvent.category || '').toLowerCase() === 'negative' || delta < 0;
+    const shortTag = starEvent.shortTag || (isNeg ? 'HAZARD STAR' : 'STAR BUFF');
+
+    state.recentClears.unshift({
+      badgeClass: isNeg ? 'tier-COLOSSAL' : 'tier-MINI',
+      badgeText: isNeg ? 'HAZARD ★' : 'BONUS ★',
+      title: `${name} · ${shortTag}`,
+      extraBadge: '',
+      points: delta,
+      isNegative: isNeg
+    });
+    state.recentClears = state.recentClears.slice(0, 6);
+    renderTelemetryFeed();
   }
 
   function setPlayerName(str) {
     state.playerName = String(str ?? '').slice(0, MAX_NAME_LENGTH);
+    saveRememberedPlayerName(state.playerName);
     const inputEl = getModalPlayerNameInput();
     if (inputEl) {
       inputEl.value = state.playerName;
@@ -598,13 +1005,35 @@
     const score = Math.max(0, Math.floor(Number(runStats.score) || 0));
     const planetsCleared = Math.max(0, Math.floor(Number(runStats.planetsCleared) || 0));
     const bp = formatBiggestPlanet(runStats.biggestPlanet, runStats.biggestPlanetObj);
+
+    // Assign a deterministic entry ID for this run so auto-saving at Game Over
+    // and subsequently clicking Save in the modal updates the same server record in-place.
+    state.pendingRunEntryId =
+      runStats.entryId ||
+      runStats.id ||
+      `run-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+    const remembered = loadRememberedPlayerName();
+    if (score > 0) {
+      submitScore({
+        id: state.pendingRunEntryId,
+        name: runStats.playerName || runStats.name || remembered || 'Anonymous Sheep',
+        score,
+        planetsCleared,
+        perfectJumps: runStats.perfectJumps || 0,
+        starsCollected: runStats.starsCollected || 0,
+        biggestPlanet: runStats.biggestPlanetObj || runStats.biggestPlanet || null,
+        biggestPlanetObj: runStats.biggestPlanetObj || null
+      });
+    }
+
     const projectedRank = getProjectedRank(score);
     const qualifies = qualifiesForHighScore(score);
 
     const badgeEl = byId('initials-rank-badge');
     if (badgeEl) {
       badgeEl.textContent = qualifies
-        ? `TOP 10 QUALIFIED · PROJECTED RANK #${projectedRank}`
+        ? `SHARED BOARD RANK #${projectedRank} · SCORE SAVED!`
         : `RUN COMPLETE · LOG YOUR SCORE`;
     }
 
@@ -624,6 +1053,8 @@
     if (inputEl) {
       if (runStats.playerName || runStats.name) {
         inputEl.value = String(runStats.playerName || runStats.name).slice(0, MAX_NAME_LENGTH);
+      } else if (remembered) {
+        inputEl.value = remembered;
       }
       setTimeout(() => {
         try {
@@ -657,9 +1088,12 @@
     const inputEl = getModalPlayerNameInput();
     const enteredName = inputEl ? inputEl.value : state.playerName;
     const result = submitScore({
+      id: state.pendingRunEntryId,
       name: enteredName,
       score: stats.score || 0,
       planetsCleared: stats.planetsCleared || 0,
+      perfectJumps: stats.perfectJumps || 0,
+      starsCollected: stats.starsCollected || 0,
       biggestPlanet: stats.biggestPlanetObj || stats.biggestPlanet || null,
       biggestPlanetObj: stats.biggestPlanetObj || null
     });
@@ -671,9 +1105,6 @@
     return result;
   }
 
-  /**
-   * Ensures the Full Player Name Entry Modal exists in the DOM (and upgrades any legacy 3-slot modal)
-   */
   function ensureModalDOM() {
     if (typeof document === 'undefined') return;
 
@@ -681,7 +1112,7 @@
       <div class="arcade-initials-dialog">
         <span id="initials-rank-badge" class="initials-header-badge">NEW HIGH SCORE!</span>
         <h2 id="initials-dialog-title" class="initials-dialog-title">ENTER PLAYER NAME</h2>
-        <p class="section-subtitle" style="margin:0;">Enter your full name or callsign for the Galactic Sheep Hall of Fame</p>
+        <p class="section-subtitle" style="margin:0;">Saved to the centralised Galactic Sheep Hall of Fame</p>
 
         <div class="initials-run-summary">
           <div class="summary-stat-box">
@@ -708,7 +1139,7 @@
             placeholder="Enter your name..."
             autocomplete="off"
             spellcheck="false"
-            value="${escapeHtml(state.playerName)}"
+            value="${escapeHtml(loadRememberedPlayerName())}"
           />
         </div>
 
@@ -765,7 +1196,6 @@
         state.playerName = inputEl.value;
       });
       inputEl.addEventListener('keydown', (e) => {
-        // Stop game shortcut listeners from seeing keys typed in the name input
         e.stopPropagation();
         if (e.key === 'Enter') {
           e.preventDefault();
@@ -801,8 +1231,6 @@
         return;
       }
 
-      // If the modal is open and the user starts typing while focus is not yet inside the input,
-      // focus the input and let them type naturally without triggering game hotkeys.
       if (!isInputFocused && inputEl) {
         inputEl.focus();
       }
@@ -843,13 +1271,13 @@
 
   function init(options = {}) {
     loadHighScores();
+    loadRememberedPlayerName();
     if (typeof document !== 'undefined') {
       ensureModalDOM();
       normalizeOfflineIcons(document);
       const existingModal = byId('initials-modal');
       if (existingModal) bindModalEvents(existingModal);
 
-      // Remove any legacy CRT classes or CRT buttons if present
       const cabinet = byId('high-score-cabinet');
       if (cabinet) {
         cabinet.classList.remove('crt-enabled', 'crt-scanlines');
@@ -885,14 +1313,20 @@
       syncEngineHighScore(getTopScore());
       renderHighScoreTable();
       renderPlanetScaleStrip(options.planetManifest || DEFAULT_PLANET_FALLBACK);
+      renderStarLegend(options.starCatalog);
       updateHUD({
         score: 0,
         planetsCleared: 0,
+        perfectJumps: 0,
+        starsCollected: 0,
         streak: 0,
         multiplier: 1.0,
         speedMultiplier: 1.0,
         planetManifest: options.planetManifest || DEFAULT_PLANET_FALLBACK
       });
+
+      fetchServerLeaderboard();
+      startServerPolling(4000);
     }
     bindGlobalKeyboard();
     return TonyArcadeUI;
@@ -900,12 +1334,21 @@
 
   const TonyArcadeUI = {
     STORAGE_KEY,
+    PLAYER_NAME_STORAGE_KEY,
+    API_URL,
     TIER_META,
     DEFAULT_SEED_SCORES,
+    DEFAULT_STAR_CATALOG_FALLBACK,
     init,
     loadHighScores,
     getHighScores,
     saveHighScores,
+    fetchServerLeaderboard,
+    syncFromServer: fetchServerLeaderboard,
+    refreshLeaderboard: fetchServerLeaderboard,
+    onRunStartSync: fetchServerLeaderboard,
+    postScoreToServer,
+    clearServerLeaderboard,
     resetHighScores,
     clearHighScores: resetHighScores,
     seedArcadeBoard: resetHighScores,
@@ -917,8 +1360,12 @@
     addHighScore: submitScore,
     renderHighScoreTable,
     renderPlanetScaleStrip,
+    renderStarLegend,
+    renderActiveEffects,
     updateHUD,
     logPlanetClear,
+    logPerfectJump,
+    logStarCollected,
     openInitialsModal,
     openScoreModal: openInitialsModal,
     handleGameOver: openInitialsModal,

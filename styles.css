@@ -1,7 +1,7 @@
 /* ==========================================================================
-   Tony's Jumping Game — GM3 Expressive Cosmic Arcade Stylesheet (styles.css)
+   Galactic Sheep — GM3 Expressive Cosmic Arcade Stylesheet (styles.css)
    Follows Bill Skill v2.2 GM3 Token Discipline (--md-sys-color-*)
-   + Authentic Retro Arcade High-Score Cabinet Aesthetics
+   + Centralised Multi-Player Arcade Leaderboard & Star Collectibles HUD
    ========================================================================== */
 
 :root {
@@ -43,6 +43,7 @@
   --arcade-magenta: #ff47b5;
   --arcade-emerald: #3dff9e;
   --arcade-violet: #b07cff;
+  --arcade-crimson: #ff3366;
 
   --tier-mini-bg: rgba(61, 255, 158, 0.14);
   --tier-mini-fg: #4dffaa;
@@ -322,6 +323,7 @@ main.game-layout,
 .surface-card,
 .hud-panel,
 .planet-strip-card,
+.star-strip-card,
 .arcade-cabinet-card {
   background-color: var(--md-sys-color-surface);
   border-radius: var(--radius-lg);
@@ -330,7 +332,7 @@ main.game-layout,
 }
 
 /* ==========================================================================
-   Live Arcade HUD Ribbon (Score, HI Score, Streak, Planets Cleared, Speed)
+   Live Arcade HUD Ribbon (Score, HI Score, Streak, Planets, Perfect, Speed)
    ========================================================================== */
 
 .hud-ribbon,
@@ -339,8 +341,8 @@ main.game-layout,
   border-radius: var(--radius-lg);
   padding: var(--space-3) var(--space-4);
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--space-2);
   align-items: center;
 }
 
@@ -374,7 +376,7 @@ main.game-layout,
 
 .hud-metric-value {
   font-family: var(--font-arcade);
-  font-size: 15px;
+  font-size: 14.5px;
   font-weight: 700;
   color: var(--md-sys-color-on-surface);
   letter-spacing: 0.04em;
@@ -400,6 +402,11 @@ main.game-layout,
   color: var(--arcade-emerald);
 }
 
+.hud-metric-value.perfect-jumps,
+#hud-perfect-jumps {
+  color: var(--arcade-gold);
+}
+
 .hud-metric-value.speed-mach,
 #hud-speed {
   color: var(--arcade-amber);
@@ -411,6 +418,54 @@ main.game-layout,
   font-size: 13.5px;
   font-weight: 700;
   color: var(--arcade-magenta);
+}
+
+/* ==========================================================================
+   Active Star Effects & Perfect Jump Status Strip (#active-effects-strip)
+   ========================================================================== */
+
+.active-effects-strip,
+#active-effects-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: 8px 14px;
+  background-color: var(--md-sys-color-surface);
+  border-radius: var(--radius-md);
+  min-height: 40px;
+}
+
+.active-effect-pill {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.active-effect-pill.is-positive {
+  background-color: rgba(61, 255, 158, 0.15);
+  color: var(--arcade-emerald);
+}
+
+.active-effect-pill.is-negative {
+  background-color: rgba(255, 51, 102, 0.18);
+  color: #ff6b8b;
+}
+
+.active-effect-pill.is-gold {
+  background-color: rgba(255, 209, 59, 0.16);
+  color: var(--arcade-gold);
+}
+
+.active-effect-pill.is-neutral {
+  background-color: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface-variant);
 }
 
 /* ==========================================================================
@@ -474,7 +529,9 @@ main.game-layout,
    ========================================================================== */
 
 .planet-strip-card,
-#planet-radar-panel {
+#planet-radar-panel,
+.star-strip-card,
+#star-guide-panel {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
@@ -661,6 +718,88 @@ main.game-layout,
 }
 
 /* ==========================================================================
+   Surprise Floating Star Collectibles Legend Grid (#star-legend-grid)
+   ========================================================================== */
+
+.star-legend-grid,
+#star-legend-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+@media (max-width: 960px) {
+  .star-legend-grid,
+  #star-legend-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .star-legend-grid,
+  #star-legend-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.star-legend-card {
+  background-color: var(--md-sys-color-surface-container);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.star-legend-card.star-card-positive {
+  background-color: rgba(61, 255, 158, 0.07);
+}
+
+.star-legend-card.star-card-negative {
+  background-color: rgba(255, 51, 102, 0.08);
+}
+
+.star-icon-swatch {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  background-color: var(--md-sys-color-surface-container-lowest);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.star-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.star-card-title-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.star-card-name {
+  font-family: var(--font-display);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--md-sys-color-on-surface);
+}
+
+.star-card-desc {
+  font-size: 11px;
+  color: var(--md-sys-color-on-surface-variant);
+  line-height: 1.35;
+}
+
+/* ==========================================================================
    Retro Arcade High Score Cabinet Table (#high-score-cabinet)
    ========================================================================== */
 
@@ -680,6 +819,7 @@ main.game-layout,
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: var(--space-2);
   padding-bottom: var(--space-2);
   position: relative;
@@ -701,6 +841,22 @@ main.game-layout,
   font-size: 11px;
   color: var(--arcade-cyan);
   margin-top: 2px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.server-sync-badge {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  background-color: rgba(61, 255, 158, 0.16);
+  color: var(--arcade-emerald);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .arcade-table-wrapper {
@@ -818,7 +974,7 @@ main.game-layout,
 .arcade-cabinet-footer {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   flex-wrap: wrap;
   gap: var(--space-2);
   padding-top: var(--space-2);
@@ -993,6 +1149,7 @@ main.game-layout,
 .telemetry-planet-tag {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
   font-weight: 600;
 }
@@ -1001,4 +1158,9 @@ main.game-layout,
   font-family: var(--font-mono);
   font-weight: 700;
   color: var(--arcade-emerald);
+  white-space: nowrap;
+}
+
+.telemetry-points-tag.is-negative {
+  color: #ff6b8b;
 }

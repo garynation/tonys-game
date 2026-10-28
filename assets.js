@@ -1,23 +1,30 @@
 /**
- * Tony's Jumping Game — Visual & Audio Assets Module (assets.js)
- * Exposes window.TONY_ASSETS ( plus aliases window.PLANET_CATALOG & window.TONY_AUDIO )
+ * Galactic Sheep — Visual & Audio Assets Module (assets.js)
+ * Starring Tony the Galactic Sheep!
+ * Exposes window.TONY_ASSETS ( plus aliases window.PLANET_CATALOG, window.STAR_CATALOG & window.TONY_AUDIO )
  *
  * Includes:
  * 1. PLANET_CATALOG: 8 well-known solar system planets (Mercury, Venus, Earth, Mars,
  *    Jupiter, Saturn, Uranus, Neptune) with verified NASA/Wikimedia Commons URLs,
  *    instant SVG/Canvas procedural textures for 100% offline/CSP reliability, and
  *    3D-shaded sphere + ring rendering via renderSprite(ctx, x, y, radius, rotationAngle, opts).
- * 2. drawTony(ctx, state): Expressive arcade sheep renderer with 4-frame gallop cycle,
- *    fluffy wool puffs, fluttering cosmic scarf, squash-and-stretch physics, floating
- *    "TONY" nameplate, and dynamic eye expressions ('determined', 'wide', 'dizzy').
- * 3. Starfield & Cosmic Track renderers: drawStarfield() and drawGroundTrack().
- * 4. TONY_AUDIO: Zero-dependency Web Audio API retro arcade sound effects synthesizer.
+ * 2. STAR_CATALOG & drawCollectibleStar(ctx, star, opts): 6 surprise floating collectible
+ *    stars of different sizes (MINI 14px to COLOSSAL 26px), point counts (4 to 8 points),
+ *    and vivid colors across Positive (Gold Supernova, Cyan Pulsar, Emerald Quasar) and
+ *    Negative (Crimson Dwarf, Violet Hazard Nova, Amber Eclipse) categories.
+ * 3. drawTony(ctx, state): Expressive Galactic Sheep renderer with 4-frame gallop cycle,
+ *    fluffy wool puffs, fluttering cosmic scarf, dynamic sizeScale/tonyScale (0.68x shrunk
+ *    to 1.38x enlarged), activeEffectTint/auraColor cosmic aura ring, squash-and-stretch
+ *    physics, floating "TONY" nameplate, and dynamic eye expressions ('determined', 'wide', 'dizzy').
+ * 4. Starfield & Cosmic Track renderers: drawStarfield() and drawGroundTrack().
+ * 5. TONY_AUDIO: Zero-dependency Web Audio API retro arcade sound effects synthesizer
+ *    including playPerfectJump(), playStarPositive(), and playStarNegative().
  */
 (function (global) {
   'use strict';
 
   // ---------------------------------------------------------------------------
-  // 1. DETERMINISTIC PSEUDO-RANDOM HELPER FOR PROCEDURAL PLANET TEXTURES
+  // 1. DETERMINISTIC PSEUDO-RANDOM HELPER FOR PROCEDURAL TEXTURES
   // ---------------------------------------------------------------------------
   function createSeededRandom(seed) {
     let s = seed >>> 0;
@@ -171,12 +178,10 @@
 
     const rng = createSeededRandom(planet.order * 98765 + 1337);
 
-    // Base fill
     ctx.fillStyle = planet.baseColor;
     ctx.fillRect(0, 0, size, size);
 
     if (planet.id === 'mercury') {
-      // Rocky grey surface with albedo patches and impact craters
       const grad = ctx.createLinearGradient(0, 0, size, size);
       grad.addColorStop(0, '#b8bec8');
       grad.addColorStop(0.5, '#8e949f');
@@ -184,7 +189,6 @@
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, size, size);
 
-      // Ejecta rays & craters
       for (let i = 0; i < 65; i++) {
         const cx = rng() * size;
         const cy = rng() * size;
@@ -197,14 +201,12 @@
         ctx.strokeStyle = 'rgba(225, 230, 240, 0.45)';
         ctx.stroke();
 
-        // Inner shadow pit
         ctx.beginPath();
         ctx.arc(cx - r * 0.15, cy - r * 0.15, r * 0.65, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(40, 44, 52, 0.35)';
         ctx.fill();
       }
     } else if (planet.id === 'venus') {
-      // Swirling golden sulfuric cloud chevrons
       const bg = ctx.createLinearGradient(0, 0, 0, size);
       bg.addColorStop(0, '#f3c677');
       bg.addColorStop(0.3, '#d9933d');
@@ -227,7 +229,6 @@
         ctx.stroke();
       }
     } else if (planet.id === 'earth') {
-      // Deep ocean gradient
       const ocean = ctx.createLinearGradient(0, 0, 0, size);
       ocean.addColorStop(0, '#1d4ed8');
       ocean.addColorStop(0.5, '#1e40af');
@@ -235,13 +236,12 @@
       ctx.fillStyle = ocean;
       ctx.fillRect(0, 0, size, size);
 
-      // Continents
       const continents = [
         { x: 65, y: 78, rx: 38, ry: 28, rot: -0.3, color: '#22c55e' },
         { x: 92, y: 145, rx: 24, ry: 42, rot: 0.2, color: '#16a34a' },
         { x: 165, y: 72, rx: 48, ry: 26, rot: 0.15, color: '#4ade80' },
-        { x: 158, y: 132, rx: 28, ry: 35, rot: -0.1, color: '#d97706' }, // Sahara/Africa tint
-        { x: 215, y: 175, rx: 22, ry: 16, rot: 0.4, color: '#ca8a04' }, // Australia
+        { x: 158, y: 132, rx: 28, ry: 35, rot: -0.1, color: '#d97706' },
+        { x: 215, y: 175, rx: 22, ry: 16, rot: 0.4, color: '#ca8a04' },
       ];
       continents.forEach((c) => {
         ctx.save();
@@ -254,12 +254,10 @@
         ctx.restore();
       });
 
-      // Polar ice caps
       ctx.fillStyle = 'rgba(248, 250, 252, 0.9)';
       ctx.fillRect(0, 0, size, 18);
       ctx.fillRect(0, size - 20, size, 20);
 
-      // Swirling white cloud bands
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
       for (let i = 0; i < 14; i++) {
         ctx.beginPath();
@@ -270,7 +268,6 @@
         ctx.stroke();
       }
     } else if (planet.id === 'mars') {
-      // Rust-red desert surface with dark basaltic plains & Valles Marineris
       const marsGrad = ctx.createLinearGradient(0, 0, 0, size);
       marsGrad.addColorStop(0, '#f08c65');
       marsGrad.addColorStop(0.45, '#d95338');
@@ -279,7 +276,6 @@
       ctx.fillStyle = marsGrad;
       ctx.fillRect(0, 0, size, size);
 
-      // Dark albedo regions (Syrtis Major)
       for (let i = 0; i < 18; i++) {
         ctx.beginPath();
         ctx.ellipse(
@@ -295,7 +291,6 @@
         ctx.fill();
       }
 
-      // Valles Marineris canyon scar
       ctx.beginPath();
       ctx.moveTo(60, 128);
       ctx.bezierCurveTo(105, 122, 150, 136, 198, 126);
@@ -303,7 +298,6 @@
       ctx.lineWidth = 5;
       ctx.stroke();
 
-      // North & South Polar Ice Caps
       ctx.fillStyle = 'rgba(255, 250, 245, 0.92)';
       ctx.beginPath();
       ctx.ellipse(size / 2, 10, 75, 14, 0, 0, Math.PI * 2);
@@ -312,7 +306,6 @@
       ctx.ellipse(size / 2, size - 8, 65, 12, 0, 0, Math.PI * 2);
       ctx.fill();
     } else if (planet.id === 'jupiter') {
-      // Alternating zonal cloud belts and Great Red Spot
       const bands = [
         { h: 0.10, c: '#9d7c5d' },
         { h: 0.08, c: '#e8d5b7' },
@@ -333,7 +326,6 @@
         yCursor += bh;
       });
 
-      // Festoons / turbulence waves along belt boundaries
       for (let y = 24; y < size - 24; y += 22) {
         ctx.beginPath();
         for (let x = 0; x <= size; x += 12) {
@@ -346,7 +338,6 @@
         ctx.stroke();
       }
 
-      // Great Red Spot
       ctx.save();
       ctx.translate(size * 0.62, size * 0.64);
       ctx.rotate(-0.08);
@@ -364,7 +355,6 @@
       ctx.fill();
       ctx.restore();
     } else if (planet.id === 'saturn') {
-      // Smooth golden-butterscotch atmospheric bands
       const satBands = [
         ['#9e8c6c', 0.0],
         ['#cfb582', 0.16],
@@ -384,7 +374,6 @@
         ctx.fillRect(0, y, size, 4);
       }
     } else if (planet.id === 'uranus') {
-      // Pale cyan-aquamarine methane atmosphere with subtle polar hood
       const ug = ctx.createLinearGradient(0, 0, size, size);
       ug.addColorStop(0, '#cffafe');
       ug.addColorStop(0.45, '#67e8f9');
@@ -402,7 +391,6 @@
         ctx.stroke();
       }
     } else if (planet.id === 'neptune') {
-      // Deep cobalt-azure ice giant with high-altitude white methane cirrus streaks & Great Dark Spot
       const ng = ctx.createLinearGradient(0, 0, 0, size);
       ng.addColorStop(0, '#1d4ed8');
       ng.addColorStop(0.35, '#2563eb');
@@ -411,13 +399,11 @@
       ctx.fillStyle = ng;
       ctx.fillRect(0, 0, size, size);
 
-      // Great Dark Spot
       ctx.beginPath();
       ctx.ellipse(size * 0.42, size * 0.56, 26, 15, 0, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(15, 23, 62, 0.72)';
       ctx.fill();
 
-      // White scooter cloud streaks
       ctx.strokeStyle = 'rgba(224, 242, 254, 0.78)';
       ctx.lineWidth = 3;
       const streaks = [
@@ -455,10 +441,9 @@
     const endAngle = isFrontHalf ? Math.PI : Math.PI * 2;
 
     if (planet.id === 'saturn') {
-      // Multi-band Saturn ring system (C ring, B ring, Cassini Division, A ring)
       const ringBands = [
         { rScale: 1.0, width: Math.max(2, radius * 0.16), color: 'rgba(234, 210, 158, 0.78)' },
-        { rScale: 0.86, width: Math.max(1.5, radius * 0.05), color: 'rgba(28, 22, 12, 0.65)' }, // Cassini division
+        { rScale: 0.86, width: Math.max(1.5, radius * 0.05), color: 'rgba(28, 22, 12, 0.65)' },
         { rScale: 0.76, width: Math.max(2.5, radius * 0.22), color: 'rgba(250, 232, 184, 0.90)' },
         { rScale: 0.62, width: Math.max(1.5, radius * 0.10), color: 'rgba(198, 170, 118, 0.45)' },
       ];
@@ -478,7 +463,6 @@
         ctx.stroke();
       });
     } else {
-      // Uranus icy epsilon/delta rings
       ctx.beginPath();
       ctx.ellipse(0, 0, rxOuter, ryOuter, 0, startAngle, endAngle);
       ctx.strokeStyle = 'rgba(165, 243, 252, 0.75)';
@@ -504,21 +488,16 @@
     planet.imageLoaded = false;
     planet.remoteImage = null;
 
-    // Create a guaranteed-ready fallback Image from the procedural canvas data URL
-    // so any consumer checking `planet.img` or `planet.image` gets a valid HTMLImageElement
     if (typeof Image !== 'undefined') {
       const fallbackImg = new Image();
       if (planet.proceduralCanvas) {
         try {
           fallbackImg.src = planet.proceduralCanvas.toDataURL('image/png');
-        } catch (e) {
-          // ignore security error if any
-        }
+        } catch (e) {}
       }
       planet.img = fallbackImg;
       planet.image = fallbackImg;
 
-      // Also asynchronously preload the verified Wikimedia/NASA photograph
       const netImg = new Image();
       netImg.crossOrigin = 'anonymous';
       netImg.onload = function () {
@@ -531,11 +510,6 @@
       netImg.src = planet.imageUrl;
     }
 
-    /**
-     * Renders the planet centered at (x, y) with given pixel `radius` and `rotationAngle`.
-     * Combines the procedural texture + NASA photograph (if loaded) + 3D spherical lighting,
-     * atmospheric corona glow, and back/front planetary rings.
-     */
     planet.renderSprite = function (ctx, x, y, radius, rotationAngle, options) {
       if (!ctx || radius <= 0) return;
       const rot = Number.isFinite(rotationAngle) ? rotationAngle : 0;
@@ -544,12 +518,10 @@
       ctx.save();
       ctx.translate(x, y);
 
-      // 1. Back half of planetary rings (behind sphere)
       if (planet.hasRings) {
         drawPlanetaryRings(ctx, planet, radius, rot, false);
       }
 
-      // 2. Outer atmospheric glow / corona
       if (opts.glow !== false) {
         const glowRadius = radius * 1.28;
         const glowGrad = ctx.createRadialGradient(0, 0, radius * 0.82, 0, 0, glowRadius);
@@ -561,18 +533,15 @@
         ctx.fill();
       }
 
-      // 3. Clipped spherical body
       ctx.save();
       ctx.beginPath();
       ctx.arc(0, 0, radius, 0, Math.PI * 2);
       ctx.clip();
 
-      // Rotate or scroll surface texture
       ctx.save();
       ctx.rotate(rot * 0.25);
 
       if (planet.proceduralCanvas) {
-        // Horizontal phase offset to simulate 3D axial spin
         const shift = ((rot * 28) % 256 + 256) % 256;
         const d = radius * 2.08;
         ctx.drawImage(
@@ -604,7 +573,6 @@
         ctx.fillRect(-radius, -radius, radius * 2, radius * 2);
       }
 
-      // Blend verified NASA photo softly on top if loaded
       if (planet.imageLoaded && planet.remoteImage && planet.remoteImage.complete) {
         try {
           ctx.globalAlpha = 0.52;
@@ -622,7 +590,6 @@
       }
       ctx.restore();
 
-      // 4. 3D Spherical Specular Highlight + Terminator Shadow
       const shadeGrad = ctx.createRadialGradient(
         -radius * 0.35,
         -radius * 0.35,
@@ -638,7 +605,6 @@
       ctx.fillStyle = shadeGrad;
       ctx.fillRect(-radius, -radius, radius * 2, radius * 2);
 
-      // Crisp inner rim highlight
       ctx.beginPath();
       ctx.arc(0, 0, radius - 0.75, 0, Math.PI * 2);
       ctx.strokeStyle = planet.accentColor || 'rgba(255,255,255,0.4)';
@@ -647,9 +613,8 @@
       ctx.stroke();
       ctx.globalAlpha = 1;
 
-      ctx.restore(); // end sphere clip
+      ctx.restore();
 
-      // 5. Front half of planetary rings (crossing in front of the sphere)
       if (planet.hasRings) {
         drawPlanetaryRings(ctx, planet, radius, rot, true);
       }
@@ -657,13 +622,8 @@
       ctx.restore();
     };
 
-    // Alias draw() -> renderSprite()
     planet.draw = planet.renderSprite;
 
-    /**
-     * Generates a self-contained PNG data URL thumbnail (including rings & 3D shading)
-     * for use in HTML HUD badges or planet manifest strips.
-     */
     planet.getThumbnailDataUrl = function (thumbSize) {
       if (typeof document === 'undefined') return planet.imageUrl;
       const sz = thumbSize || 64;
@@ -692,34 +652,356 @@
   }
 
   // ---------------------------------------------------------------------------
-  // 6. TONY THE SHEEP RENDERER — drawTony(ctx, state)
+  // 6. SURPRISE FLOATING COLLECTIBLE STARS (STAR_CATALOG & RENDERER)
+  // ---------------------------------------------------------------------------
+  const RAW_STARS = [
+    // 3 Positive Stars
+    {
+      id: 'GOLD_SUPERNOVA',
+      name: 'Gold Supernova',
+      category: 'positive',
+      isPositive: true,
+      color: '#FFD700',
+      glowColor: '#FFF3B0',
+      radius: 22,
+      sizeLabel: 'LARGE',
+      points: 5,
+      scoreDelta: 500,
+      effectType: 'BONUS_POINTS',
+      shortTag: '+500 PTS',
+      description: 'Instant +500 bonus points!',
+    },
+    {
+      id: 'CYAN_PULSAR',
+      name: 'Cyan Pulsar',
+      category: 'positive',
+      isPositive: true,
+      color: '#00E5FF',
+      glowColor: '#B2F2FF',
+      radius: 18,
+      sizeLabel: 'MEDIUM',
+      points: 6,
+      scoreDelta: 250,
+      effectType: 'HIGHER_JUMP',
+      jumpMultiplier: 1.25,
+      durationSec: 10,
+      shortTag: 'HIGH JUMP',
+      description: 'Higher jumps (+25% apex) for 10s & +250 pts!',
+    },
+    {
+      id: 'EMERALD_QUASAR',
+      name: 'Emerald Quasar',
+      category: 'positive',
+      isPositive: true,
+      color: '#2ECC71',
+      glowColor: '#A9DFBF',
+      radius: 14,
+      sizeLabel: 'MINI',
+      points: 4,
+      scoreDelta: 300,
+      effectType: 'SHRINK_AND_WIDE_GAPS',
+      tonyScale: 0.68,
+      gapMultiplier: 1.30,
+      durationSec: 10,
+      shortTag: 'MINI + WIDE GAP',
+      description: 'Makes Tony smaller (0.68x) & widens planet gaps (+30%) for 10s!',
+    },
+    // 3 Negative Hazard Stars
+    {
+      id: 'CRIMSON_DWARF',
+      name: 'Crimson Dwarf',
+      category: 'negative',
+      isPositive: false,
+      color: '#FF3366',
+      glowColor: '#FF8FA3',
+      radius: 21,
+      sizeLabel: 'LARGE',
+      points: 8,
+      scoreDelta: -150,
+      effectType: 'GROW_AND_TIGHT_GAPS',
+      tonyScale: 1.38,
+      gapMultiplier: 0.90,
+      durationSec: 8,
+      shortTag: 'BIG SHEEP + TIGHT GAP',
+      description: 'Makes Tony bigger (1.38x), narrows planet gaps (-10%), & -150 pts!',
+    },
+    {
+      id: 'VIOLET_NOVA',
+      name: 'Violet Hazard Nova',
+      category: 'negative',
+      isPositive: false,
+      color: '#C77DFF',
+      glowColor: '#F72585',
+      radius: 26,
+      sizeLabel: 'COLOSSAL',
+      points: 7,
+      scoreDelta: -300,
+      effectType: 'FIVE_BIGGER_PLANETS',
+      enlargedPlanetsCount: 5,
+      planetRadiusBoost: 1.32,
+      shortTag: '5x GIANT PLANETS -300',
+      description: 'Next 5 planets in a row grow larger (+32%) & loses 300 pts!',
+    },
+    {
+      id: 'AMBER_ECLIPSE',
+      name: 'Amber Eclipse',
+      category: 'negative',
+      isPositive: false,
+      color: '#FF7B00',
+      glowColor: '#FFD166',
+      radius: 16,
+      sizeLabel: 'SMALL',
+      points: 5,
+      scoreDelta: -200,
+      effectType: 'TIGHT_GAPS_PENALTY',
+      gapMultiplier: 0.91,
+      durationSec: 8,
+      shortTag: 'TIGHT GAPS -200',
+      description: 'Narrows planet gaps slightly (-9%) for 8s & loses 200 pts!',
+    },
+  ];
+
+  /**
+   * Renders a floating collectible star at `(star.x, star.y)` with its specific `radius`,
+   * `color`, `glowColor`, multi-point star geometry, pulsing corona, orbiting sparkles,
+   * and a crisp floating tag above/below it (`star.shortTag`).
+   */
+  function drawCollectibleStar(ctx, starInput, options) {
+    if (!ctx || !starInput) return;
+    const opts = options || {};
+    const template =
+      typeof starInput === 'string'
+        ? getStarById(starInput)
+        : getStarById(starInput.id || starInput.typeId || starInput.starId) || starInput;
+
+    const x = Number.isFinite(starInput.x) ? starInput.x : opts.x || 0;
+    const y = Number.isFinite(starInput.y) ? starInput.y : opts.y || 0;
+    const radius = Number.isFinite(starInput.radius)
+      ? starInput.radius
+      : Number.isFinite(opts.radius)
+      ? opts.radius
+      : template.radius || 18;
+    const points = Number.isFinite(starInput.points)
+      ? starInput.points
+      : template.points || 5;
+    const color = starInput.color || template.color || '#FFD700';
+    const glowColor = starInput.glowColor || template.glowColor || '#FFF3B0';
+    const category =
+      starInput.category ||
+      template.category ||
+      (starInput.scoreDelta < 0 ? 'negative' : 'positive');
+    const isNegative = category === 'negative';
+    const shortTag =
+      starInput.shortTag !== undefined ? starInput.shortTag : template.shortTag || '';
+
+    const phase = Number.isFinite(starInput.phase)
+      ? starInput.phase
+      : Number.isFinite(starInput.rotation)
+      ? starInput.rotation
+      : (typeof performance !== 'undefined' ? performance.now() : Date.now()) * 0.004;
+
+    const pulse = 1 + Math.sin(phase * 1.8) * 0.08;
+    const outerR = radius * pulse;
+    const innerR = outerR * (points >= 7 ? 0.44 : points === 4 ? 0.36 : 0.46);
+
+    ctx.save();
+    ctx.translate(x, y);
+
+    // 1. Pulsing Outer Corona Glow
+    if (opts.glow !== false) {
+      const haloR = outerR * 1.65;
+      const haloGrad = ctx.createRadialGradient(0, 0, outerR * 0.2, 0, 0, haloR);
+      haloGrad.addColorStop(0, glowColor);
+      haloGrad.addColorStop(0.45, color);
+      haloGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.globalAlpha = 0.42;
+      ctx.fillStyle = haloGrad;
+      ctx.beginPath();
+      ctx.arc(0, 0, haloR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // 2. Orbiting Ring / Sparkles (distinguishes positive vs negative hazard)
+    ctx.save();
+    ctx.rotate(phase * (isNegative ? -0.8 : 0.6));
+    if (isNegative) {
+      // Dashed warning orbit ring for negative hazard stars
+      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = glowColor;
+      ctx.lineWidth = 1.4;
+      ctx.globalAlpha = 0.72;
+      ctx.beginPath();
+      ctx.arc(0, 0, outerR * 1.22, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    } else {
+      // 3 bright orbiting starlight sparkles for positive stars
+      ctx.fillStyle = '#ffffff';
+      for (let i = 0; i < 3; i++) {
+        const ang = (i * Math.PI * 2) / 3;
+        const sx = Math.cos(ang) * (outerR * 1.18);
+        const sy = Math.sin(ang) * (outerR * 1.18);
+        ctx.beginPath();
+        ctx.arc(sx, sy, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+
+    // 3. Multi-Point Star Polygon Geometry
+    ctx.save();
+    ctx.rotate(Math.sin(phase * 0.7) * 0.18);
+    ctx.beginPath();
+    for (let i = 0; i < points * 2; i++) {
+      const r = i % 2 === 0 ? outerR : innerR;
+      const angle = (i * Math.PI) / points - Math.PI / 2;
+      const px = Math.cos(angle) * r;
+      const py = Math.sin(angle) * r;
+      if (i === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+
+    const starGrad = ctx.createRadialGradient(
+      -outerR * 0.18,
+      -outerR * 0.18,
+      outerR * 0.05,
+      0,
+      0,
+      outerR
+    );
+    starGrad.addColorStop(0, '#ffffff');
+    starGrad.addColorStop(0.35, glowColor);
+    starGrad.addColorStop(0.85, color);
+    starGrad.addColorStop(1, isNegative ? '#4a0420' : '#0f172a');
+
+    ctx.fillStyle = starGrad;
+    ctx.fill();
+    ctx.lineWidth = Math.max(1.4, radius * 0.08);
+    ctx.strokeStyle = isNegative ? '#ffe3ec' : '#ffffff';
+    ctx.stroke();
+
+    // Inner core emblem (bright sparkle core for positive, dark hazard core for negative)
+    ctx.beginPath();
+    ctx.arc(0, 0, innerR * 0.48, 0, Math.PI * 2);
+    ctx.fillStyle = isNegative ? 'rgba(24, 6, 36, 0.78)' : 'rgba(255, 255, 255, 0.88)';
+    ctx.fill();
+    ctx.restore();
+
+    // 4. Crisp Floating Tag Pill above/below the Star
+    if (opts.showTag !== false && shortTag) {
+      const tagY = -outerR - 13;
+      ctx.font = '700 9px "JetBrains Mono", "Space Grotesk", monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const textWidth = ctx.measureText(shortTag).width;
+      const padX = 6;
+      const pillW = Math.max(44, textWidth + padX * 2);
+      const pillH = 14;
+
+      ctx.fillStyle = isNegative ? 'rgba(45, 6, 24, 0.88)' : 'rgba(8, 28, 36, 0.88)';
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      if (ctx.roundRect) {
+        ctx.roundRect(-pillW / 2, tagY - pillH / 2, pillW, pillH, 4);
+      } else {
+        ctx.rect(-pillW / 2, tagY - pillH / 2, pillW, pillH);
+      }
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = isNegative ? '#ffd6e0' : '#ffffff';
+      ctx.fillText(shortTag, 0, tagY + 0.5);
+    }
+
+    ctx.restore();
+  }
+
+  const STAR_CATALOG = RAW_STARS.map((raw) => {
+    const star = Object.assign({}, raw);
+    star.renderSprite = function (ctx, x, y, radiusOverride, rotationOverride, opts) {
+      drawCollectibleStar(
+        ctx,
+        Object.assign({}, star, {
+          x: x,
+          y: y,
+          radius: radiusOverride || star.radius,
+          phase: rotationOverride || 0,
+        }),
+        opts
+      );
+    };
+    star.getThumbnailDataUrl = function (size) {
+      return getStarThumbnailDataUrl(star, size);
+    };
+    return star;
+  });
+
+  const STAR_MAP = {};
+  STAR_CATALOG.forEach((st) => {
+    STAR_MAP[st.id] = st;
+    STAR_MAP[st.id.toLowerCase()] = st;
+    STAR_MAP[st.name.toLowerCase()] = st;
+  });
+
+  function getStarById(idOrName) {
+    if (!idOrName) return STAR_CATALOG[0];
+    if (typeof idOrName === 'object' && idOrName.id) {
+      return STAR_MAP[idOrName.id] || idOrName;
+    }
+    const key = String(idOrName);
+    return STAR_MAP[key] || STAR_MAP[key.toLowerCase()] || STAR_CATALOG[0];
+  }
+
+  function getStarThumbnailDataUrl(starIdOrObj, size) {
+    if (typeof document === 'undefined') return '';
+    const st = getStarById(starIdOrObj);
+    const sz = size || 48;
+    const c = document.createElement('canvas');
+    c.width = sz;
+    c.height = sz;
+    const cctx = c.getContext('2d');
+    if (!cctx) return '';
+    const thumbRadius = Math.max(8, Math.min(sz * 0.34, st.radius * (sz / 64)));
+    drawCollectibleStar(
+      cctx,
+      Object.assign({}, st, {
+        x: sz / 2,
+        y: sz / 2,
+        radius: thumbRadius,
+        phase: 0.3,
+      }),
+      { showTag: false, glow: true }
+    );
+    return c.toDataURL('image/png');
+  }
+
+  // ---------------------------------------------------------------------------
+  // 7. TONY THE GALACTIC SHEEP RENDERER — drawTony(ctx, state)
   // ---------------------------------------------------------------------------
   /**
-   * Draws Tony the Sheep with 4-frame gallop cycle, fluffy wool puffs,
-   * cosmic scarf, squash-and-stretch physics, expressive eyes, and floating "TONY" badge.
-   *
-   * Supported `state` properties (all optional with smart defaults):
-   * - x, y: coordinates (by default center-x, bottom/feet-y if width/height not passed,
-   *         or top-left if `state.width` and `state.height` are provided and `state.anchor !== 'bottom'`).
-   *         To be 100% compatible with any engine coordinate convention:
-   *         - If `state.centerX` & `state.centerY` are passed, uses those.
-   *         - Else if `state.width` & `state.height` are passed and `state.anchor !== 'bottom-center'`,
-   *           treats `(x, y)` as top-left of bounding box `(x + width/2, y + height/2)`.
-   *         - Else treats `(x, y)` as center-bottom `(x, y - 26)`.
-   * - vy: vertical velocity (negative = rising, positive = falling)
-   * - isJumping / onGround / isGrounded: boolean
-   * - animFrame / animTime / tick: number for 4-frame gallop animation
-   * - expression: 'determined' | 'wide' | 'dizzy' (or auto-derived from `isDead`/`isCrashed`/`nearGiantPlanet`)
-   * - isDead / isCrashed / gameOver: boolean (renders dizzy 'X X' eyes + orbiting stars)
-   * - scaleX, scaleY: squash-and-stretch multipliers
-   * - showNameplate: boolean (default true)
+   * Draws Tony the Galactic Sheep with 4-frame gallop cycle, fluffy wool puffs,
+   * cosmic scarf, dynamic sizeScale/tonyScale (e.g. 0.68x shrunk, 1.38x enlarged),
+   * activeEffectTint / auraColor cosmic ring, squash-and-stretch physics,
+   * expressive eyes, and floating "TONY" badge.
    */
   function drawTony(ctx, state) {
     if (!ctx) return;
     const s = state || {};
 
-    const w = s.width || 56;
-    const h = s.height || 52;
+    const sizeScale = Number.isFinite(s.sizeScale)
+      ? s.sizeScale
+      : Number.isFinite(s.tonyScale)
+      ? s.tonyScale
+      : Number.isFinite(s.scale)
+      ? s.scale
+      : 1.0;
+
+    const baseH = 52;
+    const w = s.width || 56 * sizeScale;
+    const h = s.height || baseH * sizeScale;
 
     let cx = s.x !== undefined ? s.x : 120;
     let cy = s.y !== undefined ? s.y : 300;
@@ -732,9 +1014,8 @@
       cy = s.y;
     } else if (s.anchor === 'bottom-center' || s.width === undefined) {
       cx = s.x;
-      cy = s.y - h * 0.48;
+      cy = s.y - baseH * 0.48 * sizeScale;
     } else {
-      // Top-left bounding box convention (x, y, width, height)
       cx = s.x + w * 0.5;
       cy = s.y + h * 0.5;
     }
@@ -757,11 +1038,10 @@
         ? s.tick * 0.22
         : s.animFrame !== undefined
         ? s.animFrame * 0.9
-        : performance.now() * 0.014;
+        : (typeof performance !== 'undefined' ? performance.now() : Date.now()) * 0.014;
 
-    // Squash & stretch calculation
-    let scaleX = Number.isFinite(s.scaleX) ? s.scaleX : 1;
-    let scaleY = Number.isFinite(s.scaleY) ? s.scaleY : 1;
+    let scaleX = Number.isFinite(s.scaleX) ? s.scaleX : Number.isFinite(s.squashX) ? s.squashX : 1;
+    let scaleY = Number.isFinite(s.scaleY) ? s.scaleY : Number.isFinite(s.squashY) ? s.squashY : 1;
     if (!Number.isFinite(s.scaleX) && !Number.isFinite(s.scaleY) && isJumping) {
       const stretch = Math.max(-0.14, Math.min(0.16, -vy * 0.012));
       scaleX = 1 - stretch * 0.55;
@@ -774,20 +1054,53 @@
       ? Math.max(-0.28, Math.min(0.24, vy * 0.018))
       : Math.sin(animTick * 2) * 0.03;
 
+    // Resolve active cosmic effect aura color if any star modifier is active
+    const auraColor =
+      s.activeEffectTint ||
+      s.auraColor ||
+      (sizeScale < 0.92 ? '#2ECC71' : sizeScale > 1.08 ? '#FF3366' : null);
+
     ctx.save();
     ctx.translate(cx, cy);
+
+    // Optional Glowing Cosmic Aura Ring when a Star Effect is active
+    if (auraColor) {
+      ctx.save();
+      const auraRadius = 31 * sizeScale;
+      const auraGrad = ctx.createRadialGradient(0, 0, auraRadius * 0.35, 0, 0, auraRadius * 1.25);
+      auraGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+      auraGrad.addColorStop(0.65, auraColor);
+      auraGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      ctx.globalAlpha = 0.34 + 0.12 * Math.sin(animTick * 2.5);
+      ctx.fillStyle = auraGrad;
+      ctx.beginPath();
+      ctx.arc(0, 0, auraRadius * 1.25, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.globalAlpha = 0.78;
+      ctx.strokeStyle = auraColor;
+      ctx.lineWidth = 1.8;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, 29 * sizeScale, 22 * sizeScale, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
 
     // Draw floating "TONY" arcade badge above sheep (unrotated so text stays crisp)
     if (s.showNameplate !== false) {
       ctx.save();
-      const badgeY = -h * 0.68 - (isJumping ? 4 : 0);
+      const badgeY = -baseH * 0.68 * sizeScale - (isJumping ? 4 : 0);
       ctx.font = '700 9px "Space Grotesk", "Inter", monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.78)';
-      ctx.strokeStyle = isDead ? '#f87171' : '#38bdf8';
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.82)';
+      ctx.strokeStyle = isDead ? '#f87171' : auraColor || '#38bdf8';
       ctx.lineWidth = 1.2;
-      const bw = 34;
+      const labelText =
+        sizeScale < 0.85 ? 'TONY · MINI' : sizeScale > 1.15 ? 'TONY · GIANT' : 'TONY';
+      const bw = labelText.length > 4 ? 58 : 34;
       const bh = 13;
       ctx.beginPath();
       if (ctx.roundRect) {
@@ -798,14 +1111,14 @@
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = '#f8fafc';
-      ctx.fillText('TONY', 0, badgeY + 0.5);
+      ctx.fillText(labelText, 0, badgeY + 0.5);
       ctx.restore();
     }
 
     ctx.rotate(pitch);
-    ctx.scale(scaleX, scaleY);
+    ctx.scale(scaleX * sizeScale, scaleY * sizeScale);
 
-    // 1. Trailing Cosmic Bandana / Scarf (flutters behind Tony)
+    // 1. Trailing Cosmic Bandana / Scarf
     ctx.save();
     const wave1 = Math.sin(animTick * 2.4) * 5;
     const wave2 = Math.cos(animTick * 2.4) * 7;
@@ -855,7 +1168,6 @@
       }
       ctx.fill();
 
-      // Little golden/slate hoof tip
       ctx.fillStyle = '#475569';
       ctx.fillRect(-3, lift + 11, 6, 3.2);
       ctx.restore();
@@ -870,9 +1182,8 @@
     ctx.fill();
     ctx.restore();
 
-    // 4. Fluffy Wool Body (overlapping cloud puffs with warm cream shading)
+    // 4. Fluffy Wool Body
     ctx.save();
-    // Base wool shadow underbelly
     ctx.beginPath();
     ctx.ellipse(-2, 2, 20, 14, 0, 0, Math.PI * 2);
     ctx.fillStyle = '#cbd5e1';
@@ -894,8 +1205,8 @@
       ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
       ctx.fillStyle = '#f8fafc';
       ctx.fill();
-      ctx.strokeStyle = 'rgba(148, 163, 184, 0.35)';
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = auraColor || 'rgba(148, 163, 184, 0.35)';
+      ctx.lineWidth = auraColor ? 1.2 : 1;
       ctx.stroke();
     });
     ctx.restore();
@@ -913,7 +1224,6 @@
     ctx.save();
     ctx.translate(16, -6);
 
-    // Back ear
     ctx.save();
     const earFlop = Math.max(-0.35, Math.min(0.4, -vy * 0.03));
     ctx.rotate(-0.35 + earFlop);
@@ -923,7 +1233,6 @@
     ctx.fill();
     ctx.restore();
 
-    // Dark charcoal head/snout
     ctx.beginPath();
     ctx.ellipse(2, 1, 10.5, 8.2, 0.18, 0, Math.PI * 2);
     ctx.fillStyle = '#1e293b';
@@ -932,7 +1241,6 @@
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // Cute pink nostril / smile
     ctx.beginPath();
     ctx.arc(9.5, 1.5, 1.3, 0, Math.PI * 2);
     ctx.fillStyle = '#fda4af';
@@ -940,28 +1248,24 @@
 
     ctx.beginPath();
     if (isDead) {
-      // Wavy dizzy mouth
       ctx.arc(6.5, 5.5, 2.2, 0, Math.PI * 2);
       ctx.strokeStyle = '#fda4af';
       ctx.lineWidth = 1.2;
       ctx.stroke();
     } else {
-      // Determined smirk
       ctx.arc(6.5, 3.8, 3, 0.15, Math.PI * 0.85);
       ctx.strokeStyle = '#94a3b8';
       ctx.lineWidth = 1.3;
       ctx.stroke();
     }
 
-    // Expressive Eye
     const eyeMode = isDead
       ? 'dizzy'
-      : s.expression === 'wide' || s.nearGiantPlanet || (isJumping && vy < -6)
+      : s.expression === 'wide' || s.eyeState === 'wide' || s.nearGiantPlanet || (isJumping && vy < -6)
       ? 'wide'
       : 'determined';
 
     if (eyeMode === 'dizzy') {
-      // 'X X' dizzy eyes
       ctx.strokeStyle = '#f87171';
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -971,7 +1275,6 @@
       ctx.lineTo(0, 1.5);
       ctx.stroke();
     } else if (eyeMode === 'wide') {
-      // Wide-eyed awe when leaping over huge gas giants
       ctx.beginPath();
       ctx.arc(3, -1, 4.2, 0, Math.PI * 2);
       ctx.fillStyle = '#ffffff';
@@ -982,14 +1285,12 @@
       ctx.fillStyle = '#0f172a';
       ctx.fill();
 
-      // Dual starlight eye sparkles
       ctx.beginPath();
       ctx.arc(3.2, -2, 0.9, 0, Math.PI * 2);
       ctx.arc(4.8, -0.2, 0.5, 0, Math.PI * 2);
       ctx.fillStyle = '#ffffff';
       ctx.fill();
     } else {
-      // Determined arcade runner eye
       ctx.beginPath();
       ctx.arc(3, -1, 3.4, 0, Math.PI * 2);
       ctx.fillStyle = '#ffffff';
@@ -1005,7 +1306,6 @@
       ctx.fillStyle = '#ffffff';
       ctx.fill();
 
-      // Heroic determined eyebrow
       ctx.beginPath();
       ctx.moveTo(-0.5, -4.2);
       ctx.lineTo(6.5, -2.8);
@@ -1014,7 +1314,6 @@
       ctx.stroke();
     }
 
-    // Fluffy top head wool crown
     const headPuffs = [
       { x: -4, y: -7.5, r: 5 },
       { x: 1, y: -8.5, r: 5.5 },
@@ -1027,7 +1326,6 @@
       ctx.fill();
     });
 
-    // Orbiting dizzy stars when crashed
     if (isDead) {
       for (let i = 0; i < 3; i++) {
         const ang = animTick * 3 + (i * Math.PI * 2) / 3;
@@ -1040,12 +1338,12 @@
       }
     }
 
-    ctx.restore(); // end head
-    ctx.restore(); // end main transform
+    ctx.restore();
+    ctx.restore();
   }
 
   // ---------------------------------------------------------------------------
-  // 7. PARALLAX COSMIC STARFIELD & GROUND TRACK HELPERS
+  // 8. PARALLAX COSMIC STARFIELD & GROUND TRACK HELPERS
   // ---------------------------------------------------------------------------
   const STAR_LAYERS = (function () {
     const rng = createSeededRandom(424242);
@@ -1069,10 +1367,11 @@
     const w = width || 800;
     const h = height || 400;
     const scroll = Number.isFinite(scrollOffset) ? scrollOffset : 0;
-    const t = Number.isFinite(timeSec) ? timeSec : performance.now() * 0.001;
+    const t = Number.isFinite(timeSec)
+      ? timeSec
+      : (typeof performance !== 'undefined' ? performance.now() : Date.now()) * 0.001;
 
     ctx.save();
-    // Deep space background gradient
     const bgGrad = ctx.createLinearGradient(0, 0, 0, h);
     bgGrad.addColorStop(0, '#040714');
     bgGrad.addColorStop(0.55, '#0b112c');
@@ -1080,7 +1379,6 @@
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, w, h);
 
-    // Subtle cosmic nebula glow
     const nebX = ((w * 0.7 - scroll * 0.04) % (w + 300) + (w + 300)) % (w + 300) - 150;
     const nebGrad = ctx.createRadialGradient(nebX, h * 0.32, 10, nebX, h * 0.32, 190);
     nebGrad.addColorStop(0, 'rgba(99, 102, 241, 0.16)');
@@ -1089,7 +1387,6 @@
     ctx.fillStyle = nebGrad;
     ctx.fillRect(0, 0, w, h);
 
-    // Parallax twinkling stars
     for (let i = 0; i < STAR_LAYERS.length; i++) {
       const st = STAR_LAYERS[i];
       const sx = ((st.xFrac * w - scroll * st.parallax) % w + w) % w;
@@ -1113,14 +1410,12 @@
     const scroll = Number.isFinite(scrollOffset) ? scrollOffset : 0;
 
     ctx.save();
-    // Sub-surface deck fill
     const deckGrad = ctx.createLinearGradient(0, gy, 0, h);
     deckGrad.addColorStop(0, '#0f172a');
     deckGrad.addColorStop(1, '#020617');
     ctx.fillStyle = deckGrad;
     ctx.fillRect(0, gy, w, h - gy);
 
-    // Glowing horizon rail
     ctx.beginPath();
     ctx.moveTo(0, gy);
     ctx.lineTo(w, gy);
@@ -1128,7 +1423,6 @@
     ctx.lineWidth = 2.5;
     ctx.stroke();
 
-    // Moving perspective grid ticks along the cosmic runway
     const spacing = 48;
     const offset = ((scroll % spacing) + spacing) % spacing;
     ctx.strokeStyle = 'rgba(56, 189, 248, 0.24)';
@@ -1143,7 +1437,7 @@
   }
 
   // ---------------------------------------------------------------------------
-  // 8. WEB AUDIO SYNTHESIZER (TONY_AUDIO) — RETRO ARCADE SOUND EFFECTS
+  // 9. WEB AUDIO SYNTHESIZER (TONY_AUDIO) — RETRO ARCADE SOUND EFFECTS
   // ---------------------------------------------------------------------------
   const TONY_AUDIO = {
     ctx: null,
@@ -1164,9 +1458,7 @@
       if (this.ctx && this.ctx.state === 'suspended') {
         try {
           this.ctx.resume();
-        } catch (e) {
-          // ignore gesture restriction
-        }
+        } catch (e) {}
       }
       return this.ctx;
     },
@@ -1203,6 +1495,72 @@
         gain.connect(ctx.destination);
         osc.start(now);
         osc.stop(now + 0.16);
+      } catch (e) {}
+    },
+
+    playPerfectJump: function () {
+      const ctx = this._ensureContext();
+      if (!ctx) return;
+      try {
+        const now = ctx.currentTime;
+        const notes = [587.33, 880.0, 1174.66, 1760.0];
+        notes.forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = idx === notes.length - 1 ? 'sine' : 'triangle';
+          const start = now + idx * 0.038;
+          osc.frequency.setValueAtTime(freq, start);
+          gain.gain.setValueAtTime(0.13, start);
+          gain.gain.exponentialRampToValueAtTime(0.001, start + 0.11);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(start);
+          osc.stop(start + 0.11);
+        });
+      } catch (e) {}
+    },
+
+    playStarPositive: function () {
+      const ctx = this._ensureContext();
+      if (!ctx) return;
+      try {
+        const now = ctx.currentTime;
+        const notes = [523.25, 659.25, 783.99, 1046.5, 1318.5];
+        notes.forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'triangle';
+          const start = now + idx * 0.042;
+          osc.frequency.setValueAtTime(freq, start);
+          gain.gain.setValueAtTime(0.13, start);
+          gain.gain.exponentialRampToValueAtTime(0.001, start + 0.13);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(start);
+          osc.stop(start + 0.13);
+        });
+      } catch (e) {}
+    },
+
+    playStarNegative: function () {
+      const ctx = this._ensureContext();
+      if (!ctx) return;
+      try {
+        const now = ctx.currentTime;
+        const notes = [392.0, 311.13, 233.08, 174.61];
+        notes.forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sawtooth';
+          const start = now + idx * 0.055;
+          osc.frequency.setValueAtTime(freq, start);
+          gain.gain.setValueAtTime(0.12, start);
+          gain.gain.exponentialRampToValueAtTime(0.001, start + 0.14);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(start);
+          osc.stop(start + 0.14);
+        });
       } catch (e) {}
     },
 
@@ -1323,12 +1681,18 @@
   };
 
   // ---------------------------------------------------------------------------
-  // 9. EXPORT CONTRACT ON WINDOW
+  // 10. EXPORT CONTRACT ON WINDOW
   // ---------------------------------------------------------------------------
   const TONY_ASSETS = {
+    GAME_TITLE: 'Galactic Sheep',
     PLANET_CATALOG: PLANET_CATALOG,
     PLANET_MAP: PLANET_MAP,
     getPlanetById: getPlanetById,
+    STAR_CATALOG: STAR_CATALOG,
+    STAR_MAP: STAR_MAP,
+    getStarById: getStarById,
+    drawCollectibleStar: drawCollectibleStar,
+    getStarThumbnailDataUrl: getStarThumbnailDataUrl,
     drawTony: drawTony,
     drawStarfield: drawStarfield,
     drawGroundTrack: drawGroundTrack,
@@ -1337,5 +1701,6 @@
 
   global.TONY_ASSETS = TONY_ASSETS;
   global.PLANET_CATALOG = PLANET_CATALOG;
+  global.STAR_CATALOG = STAR_CATALOG;
   global.TONY_AUDIO = TONY_AUDIO;
 })(typeof window !== 'undefined' ? window : globalThis);

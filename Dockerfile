@@ -1,7 +1,14 @@
-FROM nginx:alpine
+FROM python:3.12-alpine
 
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY index.html bundle.html styles.css assets.js engine.js arcade.js /usr/share/nginx/html/
+WORKDIR /app
+
+COPY server.py index.html bundle.html styles.css assets.js engine.js arcade.js /app/
+
+RUN mkdir -p /app/data
+
+ENV PORT=80
+ENV GALACTIC_SHEEP_DATA_DIR=/app/data
 
 EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+
+CMD ["python3", "/app/server.py", "--port", "80"]

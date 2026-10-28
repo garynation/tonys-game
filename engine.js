@@ -1,18 +1,25 @@
 /**
- * Tony's Jumping Game — Core 60fps HTML5 Canvas Game Engine
+ * Galactic Sheep — Core 60fps HTML5 Canvas Game Engine
  * Exposes `window.TonyGameEngine`
  *
  * Features:
  * 1. Responsive Spacebar / ArrowUp / Pointer jump controls with variable hold boost (up to 160ms),
  *    jump buffering, coyote time, and Optimal Launch Window precision takeoff mechanics.
- * 2. Per-run Planet Size Randomization (`seedRunPlanets()` & `getRunPlanetManifest()`) across the
+ * 2. Immediate Perfect Jump Timing Bonus (+150 to +350+ pts) when launching from the Optimal
+ *    Launch Zone ahead of an approaching planet (`perfectJumps` counter, golden launch ring, popup).
+ * 3. Per-run Planet Size Randomization (`seedRunPlanets()` & `getRunPlanetManifest()`) across the
  *    8 solar system planets (Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus, Neptune) and
  *    5 Size Tiers (`MINI`, `SMALL`, `MEDIUM`, `LARGE`, `COLOSSAL`).
- * 3. Continuous distance scoring + radius/tier-proportional planet clearance bonuses (`+100` to `+1000+`),
+ * 4. Surprise Floating Collectible Stars of different sizes (`14px`–`26px`) and vivid colors with
+ *    3 Positive Effects (`GOLD_SUPERNOVA` +500 pts, `CYAN_PULSAR` Higher Jumps, `EMERALD_QUASAR`
+ *    Mini Sheep + Wider Planet Gaps) and 3 Negative Hazard Effects (`CRIMSON_DWARF` Big Sheep +
+ *    Tighter Planet Gaps -150 pts, `VIOLET_NOVA` Next 5 Planets in a Row Grow Bigger -300 pts,
+ *    `AMBER_ECLIPSE` Tighter Gaps -200 pts).
+ * 5. Continuous distance scoring + radius/tier-proportional planet clearance bonuses (`+100` to `+1000+`),
  *    `"CLOSE CALL! +250"` surface-skim bonus on Large/Colossal planets, consecutive jump streak
  *    multiplier, and floating canvas score popups.
- * 4. Forgiving `circle-vs-capsule` collision detection (82% inner core collision radius for ringed/giant
- *    planets) and toggleable (`H` key) Hitbox & Jump Trajectory Debug Overlay.
+ * 6. Forgiving `circle-vs-capsule` collision detection (82% inner core collision radius for ringed/giant
+ *    planets, scaled dynamically by `tonyScale`) and toggleable (`H` key) Hitbox & Trajectory Debug Overlay.
  */
 (function (root) {
   'use strict';
@@ -159,6 +166,105 @@
     }
   ];
 
+  const DEFAULT_STAR_CATALOG = [
+    {
+      id: 'GOLD_SUPERNOVA',
+      name: 'Gold Supernova',
+      category: 'positive',
+      color: '#FFD700',
+      glowColor: '#FFF3B0',
+      radius: 22,
+      sizeLabel: 'LARGE',
+      points: 5,
+      scoreDelta: 500,
+      effectType: 'BONUS_POINTS',
+      shortTag: '+500 PTS',
+      description: 'Instant +500 bonus points!'
+    },
+    {
+      id: 'CYAN_PULSAR',
+      name: 'Cyan Pulsar',
+      category: 'positive',
+      color: '#00E5FF',
+      glowColor: '#B2F2FF',
+      radius: 18,
+      sizeLabel: 'MEDIUM',
+      points: 6,
+      scoreDelta: 250,
+      effectType: 'HIGHER_JUMP',
+      jumpMultiplier: 1.25,
+      durationSec: 10,
+      shortTag: 'HIGH JUMP',
+      description: 'Higher jumps (+25% apex) for 10s & +250 pts!'
+    },
+    {
+      id: 'EMERALD_QUASAR',
+      name: 'Emerald Quasar',
+      category: 'positive',
+      color: '#2ECC71',
+      glowColor: '#A9DFBF',
+      radius: 14,
+      sizeLabel: 'MINI',
+      points: 4,
+      scoreDelta: 300,
+      effectType: 'SHRINK_AND_WIDE_GAPS',
+      tonyScale: 0.68,
+      gapMultiplier: 1.30,
+      durationSec: 10,
+      shortTag: 'MINI + WIDE GAP',
+      description: 'Makes Tony smaller (0.68x) & widens planet gaps (+30%) for 10s!'
+    },
+    {
+      id: 'CRIMSON_DWARF',
+      name: 'Crimson Dwarf',
+      category: 'negative',
+      color: '#FF3366',
+      glowColor: '#FF8FA3',
+      radius: 21,
+      sizeLabel: 'LARGE',
+      points: 8,
+      scoreDelta: -150,
+      effectType: 'GROW_AND_TIGHT_GAPS',
+      tonyScale: 1.38,
+      gapMultiplier: 0.90,
+      durationSec: 8,
+      shortTag: 'BIG SHEEP + TIGHT GAP',
+      description: 'Makes Tony bigger (1.38x), narrows planet gaps (-10%), & -150 pts!'
+    },
+    {
+      id: 'VIOLET_NOVA',
+      name: 'Violet Hazard Nova',
+      category: 'negative',
+      color: '#C77DFF',
+      glowColor: '#F72585',
+      radius: 26,
+      sizeLabel: 'COLOSSAL',
+      points: 7,
+      scoreDelta: -300,
+      effectType: 'FIVE_BIGGER_PLANETS',
+      enlargedPlanetsCount: 5,
+      planetRadiusBoost: 1.32,
+      shortTag: '5x GIANT PLANETS -300',
+      description: 'Next 5 planets in a row grow larger (+32%) & loses 300 pts!'
+    },
+    {
+      id: 'AMBER_ECLIPSE',
+      name: 'Amber Eclipse',
+      category: 'negative',
+      color: '#FF7B00',
+      glowColor: '#FFD166',
+      radius: 16,
+      sizeLabel: 'SMALL',
+      points: 5,
+      scoreDelta: -200,
+      effectType: 'TIGHT_GAPS_PENALTY',
+      gapMultiplier: 0.91,
+      durationSec: 8,
+      shortTag: 'TIGHT GAPS -200',
+      description: 'Narrows planet gaps slightly (-9%) for 8s & loses 200 pts!'
+    }
+  ];
+
   function clamp(val, min, max) {
     return Math.max(min, Math.min(max, val));
   }
@@ -178,6 +284,14 @@
     return copy;
   }
 
+  function resolveTierForRadius(radius) {
+    if (radius >= 58) return SIZE_TIERS.COLOSSAL;
+    if (radius >= 45) return SIZE_TIERS.LARGE;
+    if (radius >= 34) return SIZE_TIERS.MEDIUM;
+    if (radius >= 25) return SIZE_TIERS.SMALL;
+    return SIZE_TIERS.MINI;
+  }
+
   /**
    * Computes the strictly monotonic base clearance score for a given sizeTier and pixel radius.
    * Ensures larger radius/tier ALWAYS yields strictly more points while anchoring on
@@ -188,7 +302,7 @@
     const clampedR = clamp(
       typeof radius === 'number' ? radius : tier.minRadius,
       tier.minRadius,
-      tier.maxRadius
+      Math.max(tier.maxRadius, 78)
     );
     const span = Math.max(1, tier.maxRadius - tier.minRadius);
     const ratio = (clampedR - tier.minRadius) / span;
@@ -213,7 +327,7 @@
       this.ctx = this.canvas && this.canvas.getContext ? this.canvas.getContext('2d') : null;
 
       this.width = this.canvas ? this.canvas.width || 960 : 960;
-      this.height = this.canvas ? this.canvas.height || 420 : 420;
+      this.height = this.canvas ? this.canvas.height || 540 : 540;
       if (this.canvas) {
         if (!this.canvas.width) this.canvas.width = this.width;
         if (!this.canvas.height) this.canvas.height = this.height;
@@ -223,20 +337,21 @@
 
       // Physics constants (calibrated at 60fps step = 16.667ms)
       this.physics = {
-        gravity: 0.50,              // px / frame^2
-        jumpVelocityTap: -13.1,     // crisp standard tap jump (clears up to ~171px peak)
+        gravity: 0.50,                // px / frame^2
+        jumpVelocityTap: -13.1,       // crisp standard tap jump (clears up to ~171px peak)
         jumpVelocityPrecision: -14.2, // optimal launch window boost (clears up to ~201px peak)
-        holdBoostPerFrame: -0.22,   // additional upward lift while holding Space up to 160ms
+        holdBoostPerFrame: -0.22,     // additional upward lift while holding Space up to 160ms
         maxHoldDurationMs: 160,
         coyoteTimeMs: 95,
         jumpBufferMs: 130,
-        baseSpeed: 7.4,             // px / frame at 60fps (MACH 1.0x)
-        maxSpeed: 13.8,             // px / frame cap
-        speedRampPerSecond: 0.065,  // gradual acceleration
-        collisionCoreRatio: 0.82    // forgiving 82% inner core collision radius
+        baseSpeed: 7.4,               // px / frame at 60fps (MACH 1.0x)
+        maxSpeed: 13.8,               // px / frame cap
+        speedRampPerSecond: 0.065,    // gradual acceleration
+        collisionCoreRatio: 0.82      // forgiving 82% inner core collision radius
       };
 
       // Game state
+      this.gameTitle = 'Galactic Sheep';
       this.status = 'READY'; // 'READY' | 'PLAYING' | 'PAUSED' | 'GAMEOVER'
       this.mode = 'READY';
       this.isRunning = false;
@@ -262,11 +377,23 @@
       this.highScore = this._loadInitialHighScore();
 
       this.planetsCleared = 0;
+      this.perfectJumps = 0;
+      this.starsCollected = 0;
+      this.positiveStarsCollected = 0;
+      this.negativeStarsCollected = 0;
+      this.collectedStarsHistory = [];
       this.clearedPlanetsHistory = [];
       this.biggestPlanetCleared = null;
       this.streak = 0;
       this.maxStreak = 0;
       this.streakMultiplier = 1.0;
+
+      // Dynamic Star Modifiers
+      this.tonyScale = 1.0;
+      this.jumpBoostMultiplier = 1.0;
+      this.gapMultiplier = 1.0;
+      this.enlargedPlanetsRemaining = 0;
+      this.activeEffects = [];
 
       this.speed = this.physics.baseSpeed;
       this.mach = 1.0;
@@ -275,16 +402,19 @@
       this.frameCount = 0;
       this.lastStartTimestamp = 0;
 
-      // Tony the sheep state
+      // Tony the Galactic Sheep state
       this.tony = this._createInitialTonyState();
       this.player = this.tony; // alias
 
-      // Active obstacles, popups, particles, stars
+      // Active obstacles, collectible stars, popups, particles, launch rings, background stars
       this.obstacles = [];
       this.planets = this.obstacles; // alias
+      this.collectibles = [];
+      this.floatingStars = this.collectibles; // alias
       this.popups = [];
       this.floatingTexts = this.popups; // alias
       this.particles = [];
+      this.launchRings = [];
       this.stars = this._initFallbackStarfield();
       this.groundPosts = [];
 
@@ -300,12 +430,14 @@
       // Callbacks
       this.onScoreChange = this.options.onScoreChange || null;
       this.onPlanetCleared = this.options.onPlanetCleared || null;
+      this.onPerfectJump = this.options.onPerfectJump || null;
+      this.onStarCollected = this.options.onStarCollected || null;
       this.onGameOver = this.options.onGameOver || null;
       this.onRunStart = this.options.onRunStart || null;
       this.onManifestUpdate = this.options.onManifestUpdate || null;
       this.onStateChange = this.options.onStateChange || null;
 
-      // Seed the initial run manifest and preview obstacle
+      // Seed the initial run manifest and preview obstacle + floating star
       this.seedRunPlanets();
       this._resetWorldEntities(false);
 
@@ -325,6 +457,7 @@
       if (root) {
         root.gameEngine = this;
         root.tonyEngine = this;
+        root.TonyEngine = this;
         TonyGameEngine.instance = this;
       }
     }
@@ -346,7 +479,7 @@
       } catch (_err) {
         // Ignore storage errors in sandboxed contexts
       }
-      return 12500;
+      return 0;
     }
 
     _createInitialTonyState() {
@@ -360,9 +493,16 @@
         altitude: 0,
         vx: 0,
         vy: 0,
+        baseWidth: 56,
+        baseHeight: 50,
+        baseCapsuleRadius: 19,
         width: 56,
         height: 50,
         capsuleRadius: 19,
+        sizeScale: 1.0,
+        tonyScale: 1.0,
+        auraColor: null,
+        activeEffectTint: null,
         onGround: true,
         isGrounded: true,
         isJumping: false,
@@ -372,7 +512,7 @@
         holdElapsedMs: 0,
         chargeRatio: 0,
         lastGroundedAt: 0,
-        launchQuality: 'STANDARD', // 'STANDARD' | 'OPTIMAL' | 'EARLY' | 'LATE'
+        launchQuality: 'STANDARD', // 'STANDARD' | 'OPTIMAL' | 'PERFECT' | 'EARLY' | 'LATE'
         animFrame: 0,
         animTime: 0,
         runCycle: 0,
@@ -429,6 +569,20 @@
       return DEFAULT_PLANETS;
     }
 
+    _getStarCatalog() {
+      const extStars =
+        (root && root.TONY_ASSETS && root.TONY_ASSETS.STAR_CATALOG) ||
+        (root && root.STAR_CATALOG);
+      if (Array.isArray(extStars) && extStars.length >= 6) {
+        return extStars;
+      }
+      if (extStars && typeof extStars === 'object') {
+        const vals = Object.values(extStars);
+        if (vals.length >= 6) return vals;
+      }
+      return DEFAULT_STAR_CATALOG;
+    }
+
     /**
      * Randomizes the size distribution and planet-to-size assignment across the 8 solar system
      * planets at the start of every game run.
@@ -442,7 +596,6 @@
       let signature = '';
 
       do {
-        // Ensure all 5 tiers appear in the 8-planet manifest + 3 weighted random tiers
         const tierPool = SIZE_TIER_ORDER.slice();
         while (tierPool.length < catalog.length) {
           const r = Math.random();
@@ -524,9 +677,8 @@
       if (this.status === 'READY') {
         this._resetWorldEntities(false);
       } else if (this.obstacles.length > 0) {
-        // Update un-cleared far-off obstacles to reflect the new manifest
         for (const obs of this.obstacles) {
-          if (!obs.cleared && obs.x > this.tony.x + 240) {
+          if (!obs.cleared && obs.x > this.tony.x + 240 && !obs.isEnlargedSurge) {
             const match = this.runPlanetManifest.find((m) => m.id === obs.planetId);
             if (match) {
               obs.sizeTier = match.sizeTier;
@@ -562,19 +714,16 @@
     }
 
     _computePlanetCenterY(radius) {
-      // Position planet so its lower arc skims the cosmic track and its upper crest rises cleanly
       return this.groundY - Math.round(radius * 0.84);
     }
 
     /**
      * Computes the Optimal Launch Window on the ground track ahead of a planet.
-     * Because Tony ascends for `t_peak = |vy| / g` frames while the planet approaches at `this.speed`,
-     * jumping when the planet center is `D_optimal = speed * t_peak` ahead puts Tony at peak apex
-     * directly over the planet's center.
      */
     _computeLaunchWindow(obstacle) {
-      const effectiveVy = Math.abs(this.physics.jumpVelocityTap);
-      const tPeakFrames = effectiveVy / this.physics.gravity; // ~26.2 frames
+      const boostFactor = 1 + (this.jumpBoostMultiplier - 1) * 0.55;
+      const effectiveVy = Math.abs(this.physics.jumpVelocityTap * boostFactor);
+      const tPeakFrames = effectiveVy / this.physics.gravity;
       const optimalLeadDistance = this.speed * tPeakFrames;
       const halfWindow = (obstacle.launchWindowWidth || 150) * 0.5;
 
@@ -607,23 +756,91 @@
       };
     }
 
+    _resetModifiers() {
+      this.tonyScale = 1.0;
+      this.jumpBoostMultiplier = 1.0;
+      this.gapMultiplier = 1.0;
+      this.enlargedPlanetsRemaining = 0;
+      this.activeEffects = [];
+      this._applyTonyScaleAndAura();
+    }
+
+    _applyTonyScaleAndAura() {
+      if (!this.tony) return;
+      const scale = clamp(this.tonyScale || 1.0, 0.5, 1.75);
+      this.tony.sizeScale = scale;
+      this.tony.tonyScale = scale;
+      this.tony.width = Math.round((this.tony.baseWidth || 56) * scale);
+      this.tony.height = Math.round((this.tony.baseHeight || 50) * scale);
+      this.tony.capsuleRadius = Math.round((this.tony.baseCapsuleRadius || 19) * scale);
+
+      let aura = null;
+      if (this.activeEffects.length > 0) {
+        aura = this.activeEffects[this.activeEffects.length - 1].color || '#00E5FF';
+      } else if (this.enlargedPlanetsRemaining > 0) {
+        aura = '#C77DFF';
+      }
+      this.tony.auraColor = aura;
+      this.tony.activeEffectTint = aura;
+    }
+
+    _recomputeActiveModifiersFromEffects() {
+      let scale = 1.0;
+      let jumpMult = 1.0;
+      let gapMult = 1.0;
+
+      for (const eff of this.activeEffects) {
+        if (eff.effectType === 'HIGHER_JUMP') {
+          jumpMult = Math.max(jumpMult, eff.jumpMultiplier || 1.25);
+        } else if (eff.effectType === 'SHRINK_AND_WIDE_GAPS') {
+          scale = eff.tonyScale || 0.68;
+          gapMult = eff.gapMultiplier || 1.30;
+        } else if (eff.effectType === 'GROW_AND_TIGHT_GAPS') {
+          scale = eff.tonyScale || 1.38;
+          gapMult = eff.gapMultiplier || 0.90;
+        } else if (eff.effectType === 'TIGHT_GAPS_PENALTY') {
+          gapMult = eff.gapMultiplier || 0.91;
+        }
+      }
+
+      this.tonyScale = scale;
+      this.jumpBoostMultiplier = jumpMult;
+      this.gapMultiplier = gapMult;
+      this._applyTonyScaleAndAura();
+    }
+
     _resetWorldEntities(spawnInitialObstacles = true) {
       this.tony = this._createInitialTonyState();
       this.player = this.tony;
+      this._applyTonyScaleAndAura();
       this.obstacles.length = 0;
+      this.collectibles.length = 0;
       this.popups.length = 0;
       this.particles.length = 0;
+      this.launchRings.length = 0;
 
       if (spawnInitialObstacles) {
-        // Spawn initial planets well ahead so Tony can land from any start-jump cleanly
         const firstX = Math.max(660, Math.round(this.width * 0.72));
         const first = this.spawnPlanet({ x: firstX });
-        const secondGap = 480 + first.radius * 2 + randomInt(60, 120);
-        this.spawnPlanet({ x: firstX + secondGap });
+        const secondGap = Math.round((480 + first.radius * 2 + randomInt(60, 120)) * this.gapMultiplier);
+        const second = this.spawnPlanet({ x: firstX + secondGap });
+
+        // Spawn initial surprise floating collectible stars at jump-reachable heights
+        this.spawnCollectibleStar(null, {
+          x: Math.round((firstX + this.tony.x) * 0.56),
+          y: this.groundY - 135
+        });
+        this.spawnCollectibleStar(null, {
+          x: Math.round((first.x + second.x) * 0.5),
+          y: this.groundY - 150
+        });
       } else {
-        // In READY preview mode, place one showcase planet cleanly on the right side
         const previewX = Math.round(this.width * 0.76);
         this.spawnPlanet({ x: previewX });
+        this.spawnCollectibleStar('GOLD_SUPERNOVA', {
+          x: Math.round(this.width * 0.48),
+          y: this.groundY - 140
+        });
       }
     }
 
@@ -649,33 +866,60 @@
 
     /**
      * Spawns a planet obstacle onto the track.
-     * Supports optional overrides `{ planetId, sizeTier, radius, x }` for deterministic tests.
+     * Automatically applies the `VIOLET_NOVA` 5x enlarged planet surge when `this.enlargedPlanetsRemaining > 0`,
+     * and scales inter-planet gaps by `this.gapMultiplier`.
      */
     spawnPlanet(overrides = {}) {
       const template = this._pullNextPlanetTemplate(overrides);
 
       let tierKey = overrides.sizeTier || template.sizeTier || 'MEDIUM';
       if (!SIZE_TIERS[tierKey]) tierKey = 'MEDIUM';
-      const tier = SIZE_TIERS[tierKey];
+      let tier = SIZE_TIERS[tierKey];
 
-      const radius =
+      let radius =
         typeof overrides.radius === 'number'
           ? clamp(overrides.radius, 14, 80)
           : overrides.sizeTier && overrides.sizeTier !== template.sizeTier
           ? randomInt(tier.minRadius, tier.maxRadius)
           : template.radius;
 
+      const originalRadius = radius;
+      let isEnlargedSurge = false;
+
+      if (this.enlargedPlanetsRemaining > 0 && !overrides.skipEnlargeSurge) {
+        radius = Math.min(76, Math.max(radius + 8, Math.round(radius * 1.32)));
+        tier = resolveTierForRadius(radius);
+        tierKey = tier.id;
+        isEnlargedSurge = true;
+        this.enlargedPlanetsRemaining = Math.max(0, this.enlargedPlanetsRemaining - 1);
+
+        // Sync activeEffects count for VIOLET_NOVA
+        for (let i = this.activeEffects.length - 1; i >= 0; i--) {
+          if (this.activeEffects[i].effectType === 'FIVE_BIGGER_PLANETS') {
+            this.activeEffects[i].remainingCount = this.enlargedPlanetsRemaining;
+            this.activeEffects[i].shortTag = `${this.enlargedPlanetsRemaining}x GIANT PLANETS`;
+            if (this.enlargedPlanetsRemaining <= 0) {
+              this.activeEffects.splice(i, 1);
+            }
+          }
+        }
+        this._applyTonyScaleAndAura();
+      }
+
       const points = computePlanetClearancePoints(tierKey, radius);
 
       let spawnX = overrides.x;
       if (typeof spawnX !== 'number') {
         const lastObs = this.obstacles[this.obstacles.length - 1];
-        const minTrackGap =
+        const rawGap =
           450 +
           (lastObs ? lastObs.radius : 30) +
           radius * 1.6 +
           (tierKey === 'COLOSSAL' ? 75 : tierKey === 'LARGE' ? 45 : 0);
-        const baseRight = lastObs ? lastObs.x + minTrackGap + randomInt(40, 130) : this.width + 120;
+        const scaledGap = Math.round(rawGap * clamp(this.gapMultiplier || 1.0, 0.78, 1.65));
+        const baseRight = lastObs
+          ? lastObs.x + scaledGap + Math.round(randomInt(40, 120) * (this.gapMultiplier || 1.0))
+          : this.width + 120;
         spawnX = Math.max(this.width + radius + 40, baseRight);
       }
 
@@ -695,8 +939,10 @@
         sizeTier: tier.id,
         tier: tier.id,
         tierLabel: tier.displayName,
+        originalRadius: originalRadius,
         radius: radius,
         diameter: radius * 2,
+        isEnlargedSurge: isEnlargedSurge,
         collisionRadius: collisionRadius,
         x: spawnX,
         y: centerY,
@@ -706,8 +952,8 @@
         basePoints: points,
         points: points,
         multiplier: tier.multiplier,
-        color: tier.color,
-        badgeColor: tier.badgeColor,
+        color: isEnlargedSurge ? '#C77DFF' : tier.color,
+        badgeColor: isEnlargedSurge ? '#F72585' : tier.badgeColor,
         launchWindowWidth: tier.launchWindowWidth,
         timingHint: tier.timingHint,
         cleared: false,
@@ -724,7 +970,332 @@
     }
 
     /**
-     * Starts a fresh game run, randomizing planet sizes for the run and resetting scores.
+     * Spawns a surprise floating collectible star of a specific or random type.
+     * Supports `spawnCollectibleStar('GOLD_SUPERNOVA', { x, y })`, `spawnCollectibleStar({ id, x, y })`,
+     * or `spawnCollectibleStar()` for weighted random selection.
+     */
+    spawnCollectibleStar(typeIdOrOpts = null, customOpts = {}) {
+      const catalog = this._getStarCatalog();
+      let opts = customOpts || {};
+      let targetId = null;
+
+      if (typeof typeIdOrOpts === 'string') {
+        targetId = typeIdOrOpts;
+      } else if (typeIdOrOpts && typeof typeIdOrOpts === 'object') {
+        opts = Object.assign({}, typeIdOrOpts, customOpts);
+        targetId = opts.id || opts.starId || opts.type || opts.effectType || null;
+      }
+
+      let template = null;
+      if (targetId) {
+        const norm = String(targetId).toUpperCase();
+        template = catalog.find(
+          (s) =>
+            String(s.id).toUpperCase() === norm ||
+            String(s.name).toUpperCase() === norm ||
+            String(s.effectType).toUpperCase() === norm
+        );
+      }
+
+      if (!template) {
+        // 58% chance positive star, 42% chance negative hazard star for exciting gameplay
+        const wantPositive = Math.random() < 0.58;
+        const pool = catalog.filter((s) =>
+          wantPositive ? s.category === 'positive' : s.category === 'negative'
+        );
+        const source = pool.length > 0 ? pool : catalog;
+        template = source[Math.floor(Math.random() * source.length)] || DEFAULT_STAR_CATALOG[0];
+      }
+
+      let spawnX = opts.x;
+      if (typeof spawnX !== 'number') {
+        const lastStar = this.collectibles[this.collectibles.length - 1];
+        const minStarX = lastStar ? lastStar.x + randomInt(380, 620) : this.width + randomInt(140, 320);
+        spawnX = Math.max(this.width + 60, minStarX);
+      }
+
+      // Always float in mid-air above groundY (jump-reachable altitudes: groundY - 105 to groundY - 185)
+      const defaultY = this.groundY - randomInt(110, 178);
+      const baseY =
+        typeof opts.y === 'number'
+          ? Math.min(this.groundY - 48, Math.max(48, opts.y))
+          : defaultY;
+
+      const star = {
+        uid: `star_${this.runId}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        id: template.id,
+        starId: template.id,
+        name: template.name,
+        category: template.category || (template.scoreDelta >= 0 ? 'positive' : 'negative'),
+        color: template.color || '#FFD700',
+        glowColor: template.glowColor || '#FFF3B0',
+        radius: Number(opts.radius || template.radius) || 18,
+        sizeLabel: template.sizeLabel || 'MEDIUM',
+        points: Number(template.points) || 5,
+        scoreDelta: Number(template.scoreDelta) || 0,
+        effectType: template.effectType || 'BONUS_POINTS',
+        jumpMultiplier: template.jumpMultiplier || 1.0,
+        tonyScale: template.tonyScale || 1.0,
+        gapMultiplier: template.gapMultiplier || 1.0,
+        enlargedPlanetsCount: template.enlargedPlanetsCount || 0,
+        planetRadiusBoost: template.planetRadiusBoost || 1.32,
+        durationSec: template.durationSec || 0,
+        shortTag: template.shortTag || '',
+        description: template.description || '',
+        x: spawnX,
+        y: baseY,
+        baseY: baseY,
+        floatPhase: Math.random() * Math.PI * 2,
+        floatSpeed: 0.065 + Math.random() * 0.03,
+        floatAmp: 8 + Math.random() * 6,
+        rotation: Math.random() * Math.PI * 2,
+        rotationSpeed: (template.category === 'negative' ? -0.035 : 0.03) * (Math.random() > 0.5 ? 1 : -1),
+        collected: false
+      };
+
+      this.collectibles.push(star);
+      return star;
+    }
+
+    /**
+     * Collects a floating star (accepts a spawned star object, star template, or star ID string)
+     * and immediately applies its positive or negative effect and score delta.
+     */
+    collectStar(starObjOrId) {
+      if (!starObjOrId) return null;
+
+      let star = null;
+      if (typeof starObjOrId === 'string') {
+        const norm = starObjOrId.toUpperCase();
+        star =
+          this.collectibles.find((c) => !c.collected && String(c.id).toUpperCase() === norm) ||
+          this._getStarCatalog().find(
+            (s) =>
+              String(s.id).toUpperCase() === norm ||
+              String(s.effectType).toUpperCase() === norm
+          );
+        if (star && !star.uid) {
+          star = Object.assign({}, star, { x: this.tony.x, y: this.tony.y - 60 });
+        }
+      } else if (typeof starObjOrId === 'object') {
+        if (starObjOrId.collected) return null;
+        if (!starObjOrId.effectType && starObjOrId.id) {
+          const tpl = this._getStarCatalog().find(
+            (s) => String(s.id).toUpperCase() === String(starObjOrId.id).toUpperCase()
+          );
+          star = Object.assign({}, tpl || {}, starObjOrId);
+        } else {
+          star = starObjOrId;
+        }
+      }
+
+      if (!star) return null;
+      star.collected = true;
+
+      // Remove from active collectibles array if present
+      const idx = this.collectibles.indexOf(star);
+      if (idx !== -1) {
+        this.collectibles.splice(idx, 1);
+      }
+
+      const delta = Number(star.scoreDelta) || 0;
+      const isPositive = star.category === 'positive' || delta > 0;
+
+      this.starsCollected += 1;
+      if (isPositive) {
+        this.positiveStarsCollected += 1;
+      } else {
+        this.negativeStarsCollected += 1;
+      }
+
+      // Apply score delta (clamped >= 0) and keep bonusScore + distanceScore == score
+      this.score = Math.max(0, this.score + delta);
+      this.bonusScore = this.score - this.distanceScore;
+      if (this.score > this.highScore) {
+        this.highScore = this.score;
+      }
+
+      const durationMs = (Number(star.durationSec) || 8) * 1000;
+
+      switch (star.effectType) {
+        case 'BONUS_POINTS':
+          break;
+
+        case 'HIGHER_JUMP': {
+          this.activeEffects = this.activeEffects.filter((e) => e.effectType !== 'HIGHER_JUMP');
+          this.activeEffects.push({
+            id: star.id,
+            name: star.name,
+            category: 'positive',
+            effectType: 'HIGHER_JUMP',
+            shortTag: 'HIGH JUMP (+25%)',
+            color: star.color || '#00E5FF',
+            jumpMultiplier: star.jumpMultiplier || 1.25,
+            remainingMs: durationMs,
+            durationMs: durationMs
+          });
+          this._recomputeActiveModifiersFromEffects();
+          break;
+        }
+
+        case 'SHRINK_AND_WIDE_GAPS': {
+          this.activeEffects = this.activeEffects.filter(
+            (e) =>
+              e.effectType !== 'SHRINK_AND_WIDE_GAPS' &&
+              e.effectType !== 'GROW_AND_TIGHT_GAPS' &&
+              e.effectType !== 'TIGHT_GAPS_PENALTY'
+          );
+          this.activeEffects.push({
+            id: star.id,
+            name: star.name,
+            category: 'positive',
+            effectType: 'SHRINK_AND_WIDE_GAPS',
+            shortTag: 'MINI SHEEP + WIDE GAPS',
+            color: star.color || '#2ECC71',
+            tonyScale: star.tonyScale || 0.68,
+            gapMultiplier: star.gapMultiplier || 1.30,
+            remainingMs: durationMs,
+            durationMs: durationMs
+          });
+          this._recomputeActiveModifiersFromEffects();
+          break;
+        }
+
+        case 'GROW_AND_TIGHT_GAPS': {
+          this.activeEffects = this.activeEffects.filter(
+            (e) =>
+              e.effectType !== 'SHRINK_AND_WIDE_GAPS' &&
+              e.effectType !== 'GROW_AND_TIGHT_GAPS' &&
+              e.effectType !== 'TIGHT_GAPS_PENALTY'
+          );
+          this.activeEffects.push({
+            id: star.id,
+            name: star.name,
+            category: 'negative',
+            effectType: 'GROW_AND_TIGHT_GAPS',
+            shortTag: 'BIG SHEEP + TIGHT GAPS',
+            color: star.color || '#FF3366',
+            tonyScale: star.tonyScale || 1.38,
+            gapMultiplier: star.gapMultiplier || 0.90,
+            remainingMs: durationMs,
+            durationMs: durationMs
+          });
+          this._recomputeActiveModifiersFromEffects();
+          break;
+        }
+
+        case 'FIVE_BIGGER_PLANETS': {
+          const count = Number(star.enlargedPlanetsCount) || 5;
+          this.enlargedPlanetsRemaining = count;
+          this.activeEffects = this.activeEffects.filter(
+            (e) => e.effectType !== 'FIVE_BIGGER_PLANETS'
+          );
+          this.activeEffects.push({
+            id: star.id,
+            name: star.name,
+            category: 'negative',
+            effectType: 'FIVE_BIGGER_PLANETS',
+            shortTag: `${count}x GIANT PLANETS`,
+            color: star.color || '#C77DFF',
+            remainingCount: count
+          });
+          this._applyTonyScaleAndAura();
+          break;
+        }
+
+        case 'TIGHT_GAPS_PENALTY': {
+          this.activeEffects = this.activeEffects.filter(
+            (e) =>
+              e.effectType !== 'SHRINK_AND_WIDE_GAPS' &&
+              e.effectType !== 'TIGHT_GAPS_PENALTY'
+          );
+          this.activeEffects.push({
+            id: star.id,
+            name: star.name,
+            category: 'negative',
+            effectType: 'TIGHT_GAPS_PENALTY',
+            shortTag: 'TIGHT GAPS (-9%)',
+            color: star.color || '#FF7B00',
+            gapMultiplier: star.gapMultiplier || 0.91,
+            remainingMs: durationMs,
+            durationMs: durationMs
+          });
+          this._recomputeActiveModifiersFromEffects();
+          break;
+        }
+
+        default:
+          break;
+      }
+
+      const signStr = delta >= 0 ? `+${delta}` : `${delta}`;
+      const prefix = isPositive ? '★' : '☄';
+      this._spawnPopup({
+        text: `${prefix} ${star.name.toUpperCase()} (${signStr} PTS)!`,
+        subtext: star.shortTag || star.description || '',
+        x: clamp(star.x || this.tony.x, 120, this.width - 150),
+        y: clamp((star.y || this.tony.y - 60) - 10, 48, this.groundY - 40),
+        color: star.color || (isPositive ? '#FFD700' : '#FF3366'),
+        points: delta,
+        durationMs: 1450
+      });
+
+      this._spawnDustParticles(
+        star.x || this.tony.x,
+        star.y || this.tony.y - 40,
+        12,
+        isPositive,
+        star.color
+      );
+
+      this._playSound(isPositive ? 'playStarPositive' : 'playStarNegative');
+
+      const record = {
+        id: star.id,
+        name: star.name,
+        category: star.category,
+        color: star.color,
+        radius: star.radius,
+        sizeLabel: star.sizeLabel,
+        scoreDelta: delta,
+        effectType: star.effectType,
+        shortTag: star.shortTag,
+        description: star.description,
+        tonyScale: this.tonyScale,
+        jumpBoostMultiplier: this.jumpBoostMultiplier,
+        gapMultiplier: this.gapMultiplier,
+        enlargedPlanetsRemaining: this.enlargedPlanetsRemaining,
+        score: this.score
+      };
+
+      this.collectedStarsHistory.push(record);
+
+      if (typeof this.onStarCollected === 'function') {
+        try {
+          this.onStarCollected(record, this.getState());
+        } catch (_e) {}
+      }
+      if (
+        root &&
+        root.TonyArcadeUI &&
+        typeof root.TonyArcadeUI.logStarCollected === 'function' &&
+        this.onStarCollected !== root.TonyArcadeUI.logStarCollected
+      ) {
+        try {
+          root.TonyArcadeUI.logStarCollected(record);
+        } catch (_e) {}
+      }
+      if (typeof this.onScoreChange === 'function') {
+        try {
+          this.onScoreChange(this.score, this.getState());
+        } catch (_e) {}
+      }
+      this._syncExternalHUD();
+      return record;
+    }
+
+    /**
+     * Starts a fresh game run, randomizing planet sizes for the run and resetting scores & modifiers.
      */
     startNewRun(options = {}) {
       const shouldReroll = options.reroll !== false;
@@ -737,11 +1308,18 @@
       this.bonusScore = 0;
       this.distanceAccumulator = 0;
       this.planetsCleared = 0;
+      this.perfectJumps = 0;
+      this.starsCollected = 0;
+      this.positiveStarsCollected = 0;
+      this.negativeStarsCollected = 0;
+      this.collectedStarsHistory = [];
       this.clearedPlanetsHistory = [];
       this.biggestPlanetCleared = null;
       this.streak = 0;
       this.maxStreak = 0;
       this.streakMultiplier = 1.0;
+
+      this._resetModifiers();
 
       this.speed = this.physics.baseSpeed;
       this.mach = 1.0;
@@ -758,6 +1336,15 @@
       if (typeof this.onRunStart === 'function') {
         try {
           this.onRunStart(this.getState());
+        } catch (_e) {}
+      }
+      if (root && root.TonyArcadeUI) {
+        try {
+          if (typeof root.TonyArcadeUI.onRunStartSync === 'function') {
+            root.TonyArcadeUI.onRunStartSync();
+          } else if (typeof root.TonyArcadeUI.fetchServerLeaderboard === 'function') {
+            root.TonyArcadeUI.fetchServerLeaderboard();
+          }
         } catch (_e) {}
       }
       this._syncExternalHUD();
@@ -826,10 +1413,8 @@
 
     /**
      * Triggers Tony's jump (`vy < 0`).
-     * - If called from `READY` state, starts a new run AND immediately launches Tony into a jump.
-     * - If called shortly after a start-jump (< 260ms), refreshes upward jump velocity so sequential
-     *   start + jump key presses in automated tests always observe `vy < 0`.
-     * - Evaluates the approaching planet's Launch Window to grant precision apex boost when timed well.
+     * Evaluates the approaching planet's Optimal Launch Zone (`launchWindow`) to award
+     * immediate Perfect Jump Timing Bonus points (`+150` to `+350+`) and increment `perfectJumps`.
      */
     jump(options = {}) {
       const now = performance.now ? performance.now() : Date.now();
@@ -862,7 +1447,6 @@
         tony.y >= this.groundY - 95;
 
       if (!tony.onGround && !canCoyoteJump && !isFreshStartRefresh && !options.force) {
-        // Buffer the jump if Tony is about to land
         this.input.jumpBufferUntil = now + this.physics.jumpBufferMs;
         return false;
       }
@@ -892,11 +1476,12 @@
       tony.holdElapsedMs = 0;
       tony.launchQuality = launchQuality;
 
-      // Precision takeoff in the launch window or for giant planets gives full apex velocity
-      const baseVy = inOptimalWindow
+      // Apply Higher Jump star modifier (`this.jumpBoostMultiplier`)
+      const rawBaseVy = inOptimalWindow
         ? this.physics.jumpVelocityPrecision
         : this.physics.jumpVelocityTap;
-      tony.vy = baseVy;
+      const boostFactor = 1 + ((this.jumpBoostMultiplier || 1.0) - 1) * 0.65;
+      tony.vy = rawBaseVy * boostFactor;
 
       // Squash & stretch launch impulse
       tony.squashX = 0.84;
@@ -908,18 +1493,73 @@
           ? 'wide'
           : 'determined';
 
-      // Spawn dust puff particles at takeoff hooves
       this._spawnDustParticles(tony.x - 8, this.groundY, inOptimalWindow ? 10 : 6, inOptimalWindow);
 
-      if (inOptimalWindow && nextObs && (nextObs.sizeTier === 'LARGE' || nextObs.sizeTier === 'COLOSSAL')) {
-        this._spawnPopup({
-          text: launchQuality === 'PERFECT' ? 'PERFECT TAKEOFF!' : 'OPTIMAL LAUNCH!',
-          x: tony.x + 20,
-          y: tony.y - 54,
-          color: '#00e676',
-          sizeTier: nextObs.sizeTier,
-          durationMs: 750
+      // Requirement 5: Immediate Bonus Points for Perfect Jump Timing
+      if (inOptimalWindow && nextObs && !nextObs.perfectBonusAwarded) {
+        nextObs.perfectBonusAwarded = true;
+        const perfectBonus = Math.max(150, Math.round((nextObs.basePoints || 300) * 0.35));
+        this.perfectJumps += 1;
+        this.bonusScore += perfectBonus;
+        this.score = Math.max(0, this.distanceScore + this.bonusScore);
+        if (this.score > this.highScore) {
+          this.highScore = this.score;
+        }
+
+        this.launchRings.push({
+          x: tony.x,
+          y: this.groundY,
+          radius: 10,
+          maxRadius: 58,
+          alpha: 1.0,
+          color: '#FFD700'
         });
+
+        this._spawnPopup({
+          text: `⚡ PERFECT TIMING! +${perfectBonus}`,
+          subtext: `${nextObs.name.toUpperCase()} LAUNCH ZONE`,
+          x: clamp(tony.x + 28, 110, this.width - 140),
+          y: tony.y - 56,
+          color: '#FFD700',
+          sizeTier: nextObs.sizeTier,
+          points: perfectBonus,
+          durationMs: 1100
+        });
+
+        this._playSound('playPerfectJump');
+
+        const perfectRecord = {
+          bonusPoints: perfectBonus,
+          points: perfectBonus,
+          planetId: nextObs.planetId,
+          planetName: nextObs.name,
+          sizeTier: nextObs.sizeTier,
+          quality: launchQuality,
+          perfectJumps: this.perfectJumps,
+          score: this.score
+        };
+
+        if (typeof this.onPerfectJump === 'function') {
+          try {
+            this.onPerfectJump(perfectRecord, this.getState());
+          } catch (_e) {}
+        }
+        if (
+          root &&
+          root.TonyArcadeUI &&
+          typeof root.TonyArcadeUI.logPerfectJump === 'function' &&
+          this.onPerfectJump !== root.TonyArcadeUI.logPerfectJump
+        ) {
+          try {
+            root.TonyArcadeUI.logPerfectJump(perfectRecord);
+          } catch (_e) {}
+        }
+        if (typeof this.onScoreChange === 'function') {
+          try {
+            this.onScoreChange(this.score, this.getState());
+          } catch (_e) {}
+        }
+        this._syncExternalHUD();
       }
 
       this._playSound('playJump', inOptimalWindow ? 1.0 : 0.65);
@@ -999,7 +1639,7 @@
       this.streakMultiplier = calc.streakMultiplier;
 
       this.bonusScore += calc.totalPoints;
-      this.score = this.distanceScore + this.bonusScore;
+      this.score = Math.max(0, this.distanceScore + this.bonusScore);
 
       const prevHigh = this.highScore;
       if (this.score > this.highScore) {
@@ -1016,6 +1656,7 @@
         tierLabel: obstacle.tierLabel,
         radius: obstacle.radius,
         diameter: obstacle.diameter,
+        isEnlargedSurge: Boolean(obstacle.isEnlargedSurge),
         basePoints: calc.basePoints,
         points: calc.totalPoints,
         closeCall: calc.closeCall,
@@ -1034,7 +1675,6 @@
         this.biggestPlanetCleared = Object.assign({}, clearedRecord);
       }
 
-      // Primary clearance popup (`+600 JUPITER (LARGE)!`)
       const headline = `+${calc.totalPoints} ${obstacle.name.toUpperCase()} (${obstacle.sizeTier})!`;
       let subtext = '';
       if (calc.closeCall) {
@@ -1076,17 +1716,17 @@
     }
 
     /**
-     * Forgiving `circle-vs-capsule` collision detection between Tony's body capsule
+     * Forgiving `circle-vs-capsule` collision detection between Tony's scaled body capsule
      * and the planet's 82% inner core collision circle.
      */
     _checkCollisionAndProximity(obstacle) {
       const tony = this.tony;
-      // Tony's horizontal capsule segment [ax, ay] -> [bx, by] with radius rTony
-      const rTony = tony.capsuleRadius || 18;
-      const centerY = tony.y - 22;
-      const ax = tony.x - 10;
+      const scale = clamp(this.tonyScale || 1.0, 0.5, 1.75);
+      const rTony = tony.capsuleRadius || Math.round(19 * scale);
+      const centerY = tony.y - Math.round(22 * scale);
+      const ax = tony.x - Math.round(10 * scale);
       const ay = centerY;
-      const bx = tony.x + 12;
+      const bx = tony.x + Math.round(12 * scale);
       const by = centerY - 2;
 
       const px = obstacle.x;
@@ -1106,10 +1746,10 @@
       const dy = py - closestY;
       const dist = Math.sqrt(dx * dx + dy * dy);
 
-      const planetCoreR = obstacle.collisionRadius || Math.round(obstacle.radius * this.physics.collisionCoreRatio);
+      const planetCoreR =
+        obstacle.collisionRadius || Math.round(obstacle.radius * this.physics.collisionCoreRatio);
       const surfaceClearance = dist - (planetCoreR + rTony);
 
-      // Track closest skim distance when Tony is horizontally over the planet
       if (Math.abs(px - tony.x) <= obstacle.radius + 20) {
         if (surfaceClearance < obstacle.minSurfaceClearancePx) {
           obstacle.minSurfaceClearancePx = surfaceClearance;
@@ -1127,12 +1767,13 @@
     }
 
     triggerGameOver(reason = 'COLLISION', crashedPlanet = null) {
-      if (this.status === 'GAMEOVER') return this.getState();
+      if (this.status === 'GAMEOVER') return this.getRunSummary(reason, crashedPlanet);
 
       this._setStatus('GAMEOVER');
       this.tony.isDead = true;
       this.tony.isCrashed = true;
       this.tony.eyeState = 'dizzy';
+      this.tony.expression = 'dizzy';
       this.tony.holdingJump = false;
       this.streak = 0;
 
@@ -1151,16 +1792,13 @@
         } catch (_e) {}
       }
 
-      // Notify TonyArcadeUI if present
       if (root && root.TonyArcadeUI) {
         const ui = root.TonyArcadeUI;
         try {
-          if (typeof ui.handleGameOver === 'function') {
+          if (typeof ui.handleGameOver === 'function' && this.onGameOver !== ui.handleGameOver) {
             ui.handleGameOver(summary);
-          } else if (typeof ui.onGameOver === 'function') {
+          } else if (typeof ui.onGameOver === 'function' && this.onGameOver !== ui.onGameOver) {
             ui.onGameOver(summary);
-          } else if (typeof ui.showGameOverModal === 'function') {
-            ui.showGameOverModal(summary);
           }
         } catch (_e) {}
       }
@@ -1179,6 +1817,10 @@
         bonusScore: this.bonusScore,
         highScore: this.highScore,
         planetsCleared: this.planetsCleared,
+        perfectJumps: this.perfectJumps,
+        starsCollected: this.starsCollected,
+        positiveStarsCollected: this.positiveStarsCollected,
+        negativeStarsCollected: this.negativeStarsCollected,
         maxStreak: this.maxStreak,
         biggestPlanet: biggest
           ? `${biggest.name} (${biggest.sizeTier} ${biggest.diameter}px)`
@@ -1187,6 +1829,8 @@
         crashedInto: crashedPlanet
           ? `${crashedPlanet.name} (${crashedPlanet.sizeTier})`
           : null,
+        activeEffects: this.activeEffects.map((e) => Object.assign({}, e)),
+        enlargedPlanetsRemaining: this.enlargedPlanetsRemaining,
         runPlanetManifest: this.getRunPlanetManifest(),
         date: new Date().toISOString().slice(0, 10)
       };
@@ -1200,13 +1844,12 @@
       const dtFrames = clampedDt / 16.667;
       this.frameCount += 1;
 
-      // Always animate starfield & popups subtly
       this._updateStarfield(dtFrames);
       this._updatePopups(clampedDt, dtFrames);
       this._updateParticles(dtFrames);
+      this._updateLaunchRings(dtFrames);
 
       if (this.status === 'READY') {
-        // Gentle idle trot animation on the starting line
         this.scrollOffset += 1.2 * dtFrames;
         this.tony.runCycle += 0.12 * dtFrames;
         this.tony.animTime = this.tony.runCycle;
@@ -1216,6 +1859,11 @@
         for (const obs of this.obstacles) {
           obs.rotation += obs.rotationSpeed * dtFrames;
           obs.launchWindow = this._computeLaunchWindow(obs);
+        }
+        for (const star of this.collectibles) {
+          star.floatPhase += star.floatSpeed * dtFrames;
+          star.rotation += star.rotationSpeed * dtFrames;
+          star.y = Math.min(this.groundY - 45, star.baseY + Math.sin(star.floatPhase) * star.floatAmp);
         }
         return this.getState();
       }
@@ -1227,6 +1875,9 @@
       this.elapsedRunMs += clampedDt;
       this.scrollOffset += this.speed * dtFrames;
       const now = performance.now ? performance.now() : Date.now();
+
+      // Tick timed star effects
+      this._updateActiveEffects(clampedDt);
 
       // Gradual speed progression
       const elapsedSec = this.elapsedRunMs / 1000;
@@ -1243,7 +1894,7 @@
         const gained = Math.floor(this.distanceAccumulator);
         this.distanceAccumulator -= gained;
         this.distanceScore += gained;
-        this.score = this.distanceScore + this.bonusScore;
+        this.score = Math.max(0, this.distanceScore + this.bonusScore);
         if (this.score > this.highScore) {
           this.highScore = this.score;
         }
@@ -1254,13 +1905,12 @@
       tony.scarfWave += 0.24 * this.mach * dtFrames;
 
       if (!tony.onGround) {
-        // Variable jump hold boost up to 160ms
         if (
           (tony.holdingJump || this.input.spaceDown) &&
           tony.holdElapsedMs < this.physics.maxHoldDurationMs &&
           tony.vy < 0
         ) {
-          tony.vy += this.physics.holdBoostPerFrame * dtFrames;
+          tony.vy += this.physics.holdBoostPerFrame * (this.jumpBoostMultiplier || 1.0) * dtFrames;
           tony.holdElapsedMs += clampedDt;
           tony.chargeRatio = clamp(tony.holdElapsedMs / this.physics.maxHoldDurationMs, 0, 1);
         }
@@ -1269,7 +1919,6 @@
         tony.y += tony.vy * dtFrames;
         tony.altitude = Math.max(0, Math.round(this.groundY - tony.y));
 
-        // Subtle mid-air pitch rotation
         tony.rotation = clamp(tony.vy * 0.018, -0.22, 0.20);
 
         if (tony.y >= this.groundY) {
@@ -1282,14 +1931,12 @@
           tony.holdingJump = false;
           tony.rotation = 0;
           tony.lastGroundedAt = now;
-          // Landing squash
           tony.squashX = 1.16;
           tony.squashY = 0.85;
           tony.scaleX = 1.16;
           tony.scaleY = 0.85;
           this._spawnDustParticles(tony.x, this.groundY, 5, false);
 
-          // Execute buffered jump if player pressed Space just before touchdown
           if (this.input.jumpBufferUntil > now) {
             this.input.jumpBufferUntil = 0;
             this.jump();
@@ -1304,11 +1951,13 @@
         tony.animFrame = Math.floor(tony.runCycle) % 4;
       }
 
-      // Relax squash & stretch back to 1.0
       tony.squashX += (1.0 - tony.squashX) * 0.22 * dtFrames;
       tony.squashY += (1.0 - tony.squashY) * 0.22 * dtFrames;
       tony.scaleX = tony.squashX;
       tony.scaleY = tony.squashY;
+
+      // Update floating collectible stars & check collection
+      this._updateCollectibleStars(dtFrames);
 
       // Update planets & check clearances / collisions
       let nearGiant = false;
@@ -1327,20 +1976,17 @@
           nearGiant = true;
         }
 
-        // Collision check
         const hitInfo = this._checkCollisionAndProximity(obs);
         if (hitInfo.collided) {
           this.triggerGameOver('COLLISION', obs);
           return this.getState();
         }
 
-        // Check if Tony's trailing hoof cleared the planet
         const trailingHoofX = tony.x - tony.width * 0.26;
         if (!obs.cleared && obs.x + obs.collisionRadius < trailingHoofX) {
           this._handlePlanetCleared(obs);
         }
 
-        // Remove off-screen obstacles
         if (obs.x + obs.radius < -120) {
           this.obstacles.splice(i, 1);
         }
@@ -1349,11 +1995,15 @@
       tony.nearGiantPlanet = nearGiant;
       if (!tony.isDead) {
         tony.eyeState = nearGiant || !tony.onGround ? 'wide' : 'determined';
+        tony.expression = tony.eyeState;
       }
 
-      // Ensure at least 2 upcoming obstacles are always queued on the track
       while (this.obstacles.length < 3) {
         this.spawnPlanet();
+      }
+
+      while (this.collectibles.length < 2) {
+        this.spawnCollectibleStar();
       }
 
       if (this.frameCount % 3 === 0) {
@@ -1361,6 +2011,68 @@
       }
 
       return this.getState();
+    }
+
+    _updateActiveEffects(dtMs) {
+      if (this.activeEffects.length === 0) return;
+      let changed = false;
+      for (let i = this.activeEffects.length - 1; i >= 0; i--) {
+        const eff = this.activeEffects[i];
+        if (typeof eff.remainingMs === 'number') {
+          eff.remainingMs -= dtMs;
+          if (eff.remainingMs <= 0) {
+            this.activeEffects.splice(i, 1);
+            changed = true;
+          }
+        }
+      }
+      if (changed) {
+        this._recomputeActiveModifiersFromEffects();
+      }
+    }
+
+    _updateCollectibleStars(dtFrames) {
+      const tony = this.tony;
+      const scale = clamp(this.tonyScale || 1.0, 0.5, 1.75);
+      const tonyCenterX = tony.x;
+      const tonyCenterY = tony.y - 24 * scale;
+      const tonyCollectRadius = 24 * scale;
+
+      for (let i = this.collectibles.length - 1; i >= 0; i--) {
+        const star = this.collectibles[i];
+        star.x -= this.speed * 0.94 * dtFrames;
+        star.floatPhase += star.floatSpeed * dtFrames;
+        star.rotation += star.rotationSpeed * dtFrames;
+        star.y = Math.min(
+          this.groundY - 45,
+          star.baseY + Math.sin(star.floatPhase) * star.floatAmp
+        );
+
+        const dx = star.x - tonyCenterX;
+        const dy = star.y - tonyCenterY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (!star.collected && dist <= star.radius + tonyCollectRadius) {
+          this.collectStar(star);
+          continue;
+        }
+
+        if (star.x + star.radius < -80) {
+          this.collectibles.splice(i, 1);
+        }
+      }
+    }
+
+    _updateLaunchRings(dtFrames) {
+      for (let i = this.launchRings.length - 1; i >= 0; i--) {
+        const ring = this.launchRings[i];
+        ring.x -= this.speed * dtFrames;
+        ring.radius += 2.2 * dtFrames;
+        ring.alpha -= 0.045 * dtFrames;
+        if (ring.alpha <= 0 || ring.radius >= ring.maxRadius) {
+          this.launchRings.splice(i, 1);
+        }
+      }
     }
 
     /**
@@ -1456,28 +2168,34 @@
       // 1. Deep Cosmic Background & Parallax Starfield
       this._renderBackgroundAndStars(ctx);
 
-      // 2. Cosmic Ground Track & Optimal Takeoff / Launch Windows
+      // 2. Cosmic Ground Track, Launch Rings & Optimal Takeoff Windows
       this._renderCosmicTrack(ctx);
       this._renderLaunchWindows(ctx);
+      this._renderLaunchRings(ctx);
 
-      // 3. Approaching Planets (using window.TONY_ASSETS if available, else procedural 3D sphere)
+      // 3. Surprise Floating Collectible Stars
+      for (const star of this.collectibles) {
+        this._renderCollectibleStar(ctx, star);
+      }
+
+      // 4. Approaching Planets
       for (const obs of this.obstacles) {
         this._renderPlanetObstacle(ctx, obs);
       }
 
-      // 4. Takeoff/landing dust particles
+      // 5. Takeoff/landing dust particles
       this._renderParticles(ctx);
 
-      // 5. Tony the Sheep
+      // 6. Tony the Galactic Sheep
       this._renderTony(ctx);
 
-      // 6. Floating Score Popups
+      // 7. Floating Score Popups
       this._renderPopups(ctx);
 
-      // 7. In-Canvas HUD Banner & Next Planet Radar Pill
+      // 8. In-Canvas HUD Banner & Next Planet / Active Modifiers Pill
       this._renderCanvasOverlayHUD(ctx);
 
-      // 8. Hitbox & Jump Trajectory Debug Overlay (`H` key)
+      // 9. Hitbox & Jump Trajectory Debug Overlay (`H` key)
       if (this.debugHitboxes) {
         this._renderDebugOverlay(ctx);
       }
@@ -1486,7 +2204,6 @@
     }
 
     _renderBackgroundAndStars(ctx) {
-      // Check if TONY_ASSETS provides a custom starfield renderer
       const assets = root && root.TONY_ASSETS;
       if (assets && typeof assets.drawStarfield === 'function') {
         try {
@@ -1501,21 +2218,6 @@
       grad.addColorStop(0.58, '#101730');
       grad.addColorStop(1, '#182246');
       ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, this.width, this.height);
-
-      // Subtle cosmic nebula glow
-      const nebula = ctx.createRadialGradient(
-        this.width * 0.72,
-        this.height * 0.28,
-        15,
-        this.width * 0.72,
-        this.height * 0.28,
-        280
-      );
-      nebula.addColorStop(0, 'rgba(100, 181, 246, 0.11)');
-      nebula.addColorStop(0.5, 'rgba(186, 104, 200, 0.06)');
-      nebula.addColorStop(1, 'rgba(10, 14, 29, 0)');
-      ctx.fillStyle = nebula;
       ctx.fillRect(0, 0, this.width, this.height);
 
       for (const s of this.stars) {
@@ -1539,8 +2241,6 @@
       }
 
       const y = this.groundY;
-
-      // Sub-track horizon glow
       const trackGrad = ctx.createLinearGradient(0, y - 4, 0, this.height);
       trackGrad.addColorStop(0, '#1e2c59');
       trackGrad.addColorStop(0.18, '#121936');
@@ -1548,7 +2248,6 @@
       ctx.fillStyle = trackGrad;
       ctx.fillRect(0, y, this.width, this.height - y);
 
-      // Primary glowing cyan rail
       ctx.strokeStyle = '#4dd0e1';
       ctx.lineWidth = 2.5;
       ctx.beginPath();
@@ -1556,7 +2255,6 @@
       ctx.lineTo(this.width, y);
       ctx.stroke();
 
-      // Scrolling perspective grid ticks along the cosmic runway
       const scrollOffset = ((this.distanceScore * 4) + (this.frameCount * this.speed * 0.5)) % 48;
       ctx.strokeStyle = 'rgba(77, 208, 225, 0.26)';
       ctx.lineWidth = 1.5;
@@ -1568,10 +2266,19 @@
       }
     }
 
-    /**
-     * Draws the visual "Launch Window / Optimal Takeoff Indicator" on the ground track
-     * ahead of approaching planets (especially prominent for LARGE & COLOSSAL planets).
-     */
+    _renderLaunchRings(ctx) {
+      for (const ring of this.launchRings) {
+        ctx.save();
+        ctx.globalAlpha = clamp(ring.alpha, 0, 1);
+        ctx.strokeStyle = ring.color || '#FFD700';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.ellipse(ring.x, ring.y, ring.radius, ring.radius * 0.35, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
     _renderLaunchWindows(ctx) {
       for (const obs of this.obstacles) {
         if (obs.cleared || obs.x + obs.radius < this.tony.x) continue;
@@ -1597,7 +2304,6 @@
           : 'rgba(255, 215, 64, 0.14)';
         ctx.fillRect(padX, y - 4, padW, 8);
 
-        // Optimal center chevron on track
         ctx.strokeStyle = activeColor;
         ctx.lineWidth = lw.active ? 2.5 : 1.5;
         ctx.beginPath();
@@ -1605,7 +2311,6 @@
         ctx.lineTo(lw.optimalX, y + 8);
         ctx.stroke();
 
-        // Connect dashed guide line from launch pad to giant planet base
         if (isGiant) {
           ctx.setLineDash([4, 4]);
           ctx.strokeStyle = lw.active ? 'rgba(0, 230, 118, 0.5)' : 'rgba(255, 171, 64, 0.35)';
@@ -1618,17 +2323,91 @@
           ctx.font = '700 10px "JetBrains Mono", "Inter", monospace';
           ctx.textAlign = 'center';
           ctx.fillStyle = activeColor;
-          const labelText = lw.active ? '▲ JUMP NOW! ▲' : 'TAKEOFF ZONE';
+          const labelText = lw.active ? '▲ PERFECT JUMP ZONE ▲' : 'TAKEOFF ZONE';
           ctx.fillText(labelText, lw.optimalX, y + 20);
         }
         ctx.restore();
       }
     }
 
+    _renderCollectibleStar(ctx, star) {
+      if (star.collected) return;
+      const assets = root && root.TONY_ASSETS;
+      if (assets && typeof assets.drawCollectibleStar === 'function') {
+        try {
+          assets.drawCollectibleStar(ctx, star);
+          return;
+        } catch (_e) {}
+      }
+
+      // Built-in fallback multi-point collectible star renderer
+      ctx.save();
+      ctx.translate(star.x, star.y);
+
+      const r = star.radius || 18;
+      const glow = ctx.createRadialGradient(0, 0, r * 0.2, 0, 0, r * 1.7);
+      glow.addColorStop(0, star.glowColor || '#FFF3B0');
+      glow.addColorStop(0.5, star.color || '#FFD700');
+      glow.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = glow;
+      ctx.globalAlpha = 0.55;
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 1.7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1.0;
+
+      ctx.save();
+      ctx.rotate(star.rotation || 0);
+      const pts = star.points || 5;
+      const innerR = r * 0.46;
+      ctx.beginPath();
+      for (let i = 0; i < pts * 2; i++) {
+        const rad = i % 2 === 0 ? r : innerR;
+        const ang = (i * Math.PI) / pts - Math.PI * 0.5;
+        const sx = Math.cos(ang) * rad;
+        const sy = Math.sin(ang) * rad;
+        if (i === 0) ctx.moveTo(sx, sy);
+        else ctx.lineTo(sx, sy);
+      }
+      ctx.closePath();
+      ctx.fillStyle = star.color || '#FFD700';
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = star.glowColor || '#FFFFFF';
+      ctx.stroke();
+      ctx.restore();
+
+      if (star.shortTag) {
+        ctx.font = '700 10px "JetBrains Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = star.category === 'negative' ? '#FF8FA3' : '#E0F7FA';
+        ctx.fillText(star.shortTag, 0, -r - 8);
+      }
+
+      ctx.restore();
+    }
+
     _renderPlanetObstacle(ctx, obs) {
       ctx.save();
 
-      // Delegate to window.TONY_ASSETS planet renderer if available
+      // If enlarged by VIOLET_NOVA surge, draw a pulsing violet hazard corona
+      if (obs.isEnlargedSurge) {
+        const surgeGlow = ctx.createRadialGradient(
+          obs.x,
+          obs.y,
+          obs.radius * 0.85,
+          obs.x,
+          obs.y,
+          obs.radius * 1.38
+        );
+        surgeGlow.addColorStop(0, 'rgba(199, 125, 255, 0.45)');
+        surgeGlow.addColorStop(1, 'rgba(199, 125, 255, 0)');
+        ctx.fillStyle = surgeGlow;
+        ctx.beginPath();
+        ctx.arc(obs.x, obs.y, obs.radius * 1.38, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
       let renderedByAssets = false;
       const assets = root && root.TONY_ASSETS;
       if (assets) {
@@ -1661,12 +2440,12 @@
         this._renderFallbackPlanet(ctx, obs);
       }
 
-      // Draw crisp planet label & size tier badge beneath or above planet
       const badgeY = this.groundY + 34;
       ctx.font = '700 11px "Space Grotesk", "Inter", sans-serif';
       ctx.textAlign = 'center';
       ctx.fillStyle = '#e8eaed';
-      ctx.fillText(`${obs.name.toUpperCase()} · ${obs.sizeTier}`, obs.x, badgeY);
+      const surgeTag = obs.isEnlargedSurge ? ' ⚡SURGE' : '';
+      ctx.fillText(`${obs.name.toUpperCase()} · ${obs.sizeTier}${surgeTag}`, obs.x, badgeY);
 
       ctx.font = '600 10px "JetBrains Mono", monospace';
       ctx.fillStyle = obs.color || '#ffd740';
@@ -1678,7 +2457,6 @@
     _renderFallbackPlanet(ctx, obs) {
       const { x, y, radius, baseColor, accentColor, hasRings, rotation, planetId } = obs;
 
-      // Outer atmospheric glow
       const glow = ctx.createRadialGradient(x, y, radius * 0.75, x, y, radius * 1.32);
       glow.addColorStop(0, baseColor);
       glow.addColorStop(1, 'rgba(0,0,0,0)');
@@ -1689,7 +2467,6 @@
       ctx.fill();
       ctx.globalAlpha = 1.0;
 
-      // Back half of rings if Saturn/Uranus
       if (hasRings) {
         ctx.save();
         ctx.translate(x, y);
@@ -1702,7 +2479,6 @@
         ctx.restore();
       }
 
-      // Clipped 3D planet sphere
       ctx.save();
       ctx.beginPath();
       ctx.arc(x, y, radius, 0, Math.PI * 2);
@@ -1722,7 +2498,6 @@
       ctx.fillStyle = sphereGrad;
       ctx.fillRect(x - radius, y - radius, radius * 2, radius * 2);
 
-      // Banded details / craters rotated
       ctx.translate(x, y);
       ctx.rotate(rotation * 0.3);
       ctx.fillStyle = 'rgba(255, 255, 255, 0.16)';
@@ -1731,7 +2506,6 @@
       }
       ctx.restore();
 
-      // Front half of rings
       if (hasRings) {
         ctx.save();
         ctx.translate(x, y);
@@ -1754,14 +2528,24 @@
         } catch (_e) {}
       }
 
-      // Built-in expressive fallback renderer for Tony the Sheep
       const t = this.tony;
+      const sizeScale = clamp(this.tonyScale || 1.0, 0.5, 1.75);
       ctx.save();
       ctx.translate(t.x, t.y);
       ctx.rotate(t.rotation || 0);
-      ctx.scale(t.squashX || 1, t.squashY || 1);
+      ctx.scale((t.squashX || 1) * sizeScale, (t.squashY || 1) * sizeScale);
 
-      // Cosmic scarf trailing behind Tony
+      if (t.auraColor) {
+        ctx.save();
+        ctx.strokeStyle = t.auraColor;
+        ctx.globalAlpha = 0.45;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(0, -22, 28, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
       const wave = Math.sin(t.scarfWave || 0) * 4;
       ctx.fillStyle = '#ff5252';
       ctx.beginPath();
@@ -1772,7 +2556,6 @@
       ctx.closePath();
       ctx.fill();
 
-      // 4 galloping black sheep legs
       const phase = t.onGround ? t.legPhase : 0.6;
       const legOffsets = [-12, -5, 5, 12];
       ctx.strokeStyle = '#1c2230';
@@ -1786,7 +2569,6 @@
         ctx.stroke();
       }
 
-      // Fluffy white wool body puffs
       ctx.fillStyle = '#f8f9fa';
       const puffs = [
         [-14, -24, 11],
@@ -1802,19 +2584,16 @@
         ctx.fill();
       }
 
-      // Head & cute ear
       ctx.fillStyle = '#263238';
       ctx.beginPath();
       ctx.ellipse(17, -26, 10, 8.5, 0.15, 0, Math.PI * 2);
       ctx.fill();
 
-      // Fluffy top wool tuft
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
       ctx.arc(14, -34, 6.5, 0, Math.PI * 2);
       ctx.fill();
 
-      // Expressive eyes
       if (t.isDead || t.eyeState === 'dizzy') {
         ctx.strokeStyle = '#ffeb3b';
         ctx.lineWidth = 2;
@@ -1836,7 +2615,6 @@
         ctx.fill();
       }
 
-      // Floating "TONY" mini nameplate
       if (t.showNameplate) {
         ctx.font = '700 9px "JetBrains Mono", monospace';
         ctx.textAlign = 'center';
@@ -1888,12 +2666,12 @@
       if (nextObs) {
         const pillX = 16;
         const pillY = 14;
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.76)';
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.78)';
         ctx.beginPath();
         if (ctx.roundRect) {
-          ctx.roundRect(pillX, pillY, 278, 30, 8);
+          ctx.roundRect(pillX, pillY, 292, 30, 8);
         } else {
-          ctx.rect(pillX, pillY, 278, 30);
+          ctx.rect(pillX, pillY, 292, 30);
         }
         ctx.fill();
 
@@ -1910,14 +2688,44 @@
         );
       }
 
+      // Render active star effect pills at top-right of canvas
+      if (this.activeEffects.length > 0) {
+        let offsetY = 14;
+        for (const eff of this.activeEffects) {
+          const pillW = 210;
+          const pillX = this.width - pillW - 16;
+          ctx.fillStyle = 'rgba(15, 23, 42, 0.82)';
+          ctx.strokeStyle = eff.color || '#00E5FF';
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          if (ctx.roundRect) {
+            ctx.roundRect(pillX, offsetY, pillW, 24, 6);
+          } else {
+            ctx.rect(pillX, offsetY, pillW, 24);
+          }
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.font = '700 10px "JetBrains Mono", monospace';
+          ctx.textAlign = 'left';
+          ctx.fillStyle = eff.color || '#00E5FF';
+          const timerLabel =
+            typeof eff.remainingMs === 'number'
+              ? `${(eff.remainingMs / 1000).toFixed(1)}s`
+              : `${eff.remainingCount || this.enlargedPlanetsRemaining} left`;
+          ctx.fillText(`${eff.shortTag} · ${timerLabel}`, pillX + 8, offsetY + 15);
+          offsetY += 28;
+        }
+      }
+
       if (this.status === 'READY') {
         ctx.fillStyle = 'rgba(7, 10, 22, 0.55)';
         ctx.fillRect(0, 0, this.width, this.height);
 
         ctx.textAlign = 'center';
-        ctx.font = '800 26px "Space Grotesk", "Inter", sans-serif';
+        ctx.font = '800 28px "Space Grotesk", "Inter", sans-serif';
         ctx.fillStyle = '#ffffff';
-        ctx.fillText("TONY'S JUMPING GAME", this.width * 0.5, this.height * 0.36);
+        ctx.fillText('GALACTIC SHEEP', this.width * 0.5, this.height * 0.36);
 
         ctx.font = '600 14px "Inter", sans-serif';
         ctx.fillStyle = '#80deea';
@@ -1937,29 +2745,26 @@
       ctx.restore();
     }
 
-    /**
-     * Draws the visual Hitbox & Parabolic Jump Trajectory Debug Overlay (`H` key).
-     */
     _renderDebugOverlay(ctx) {
       ctx.save();
       const tony = this.tony;
+      const scale = clamp(this.tonyScale || 1.0, 0.5, 1.75);
 
-      // 1. Tony's capsule collision circles
       ctx.strokeStyle = '#00e676';
       ctx.lineWidth = 1.8;
       ctx.beginPath();
-      ctx.arc(tony.x, tony.y - 22, tony.capsuleRadius || 18, 0, Math.PI * 2);
+      ctx.arc(tony.x, tony.y - Math.round(22 * scale), tony.capsuleRadius || 19, 0, Math.PI * 2);
       ctx.stroke();
 
-      // 2. Predicted parabolic jump arc from Tony's current position
       ctx.strokeStyle = 'rgba(0, 229, 255, 0.75)';
       ctx.setLineDash([5, 4]);
       ctx.beginPath();
       let simX = tony.x;
       let simY = tony.onGround ? this.groundY : tony.y;
-      let simVy = tony.onGround ? this.physics.jumpVelocityPrecision : tony.vy;
+      const boostFactor = 1 + ((this.jumpBoostMultiplier || 1.0) - 1) * 0.65;
+      let simVy = tony.onGround ? this.physics.jumpVelocityPrecision * boostFactor : tony.vy;
       ctx.moveTo(simX, simY);
-      for (let f = 0; f < 62; f++) {
+      for (let f = 0; f < 68; f++) {
         simX += this.speed;
         simVy += this.physics.gravity;
         simY += simVy;
@@ -1973,16 +2778,13 @@
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // 3. Planet visual radius vs 82% inner collision core radius
       for (const obs of this.obstacles) {
-        // Outer visual radius
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.arc(obs.x, obs.y, obs.radius, 0, Math.PI * 2);
         ctx.stroke();
 
-        // 82% inner core collision radius
         ctx.strokeStyle = '#ff1744';
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -1990,11 +2792,19 @@
         ctx.stroke();
       }
 
+      for (const star of this.collectibles) {
+        ctx.strokeStyle = star.category === 'negative' ? '#ff3366' : '#ffd700';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
       ctx.font = '700 11px "JetBrains Mono", monospace';
       ctx.fillStyle = '#00e676';
       ctx.textAlign = 'right';
       ctx.fillText(
-        `DEBUG [H] | VY:${tony.vy.toFixed(1)} | ALT:${tony.altitude}px | SPD:${this.speed.toFixed(1)}`,
+        `DEBUG [H] | SCALE:${this.tonyScale.toFixed(2)}x | GAP:${this.gapMultiplier.toFixed(2)}x | VY:${tony.vy.toFixed(1)}`,
         this.width - 16,
         28
       );
@@ -2048,7 +2858,6 @@
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable) {
         return true;
       }
-      // Also check if an arcade initials modal is actively capturing keys
       if (
         root &&
         root.TonyArcadeUI &&
@@ -2132,12 +2941,13 @@
     }
 
     /**
-     * Returns a comprehensive snapshot of current engine, player, HUD, and planet state.
+     * Returns a comprehensive snapshot of current engine, player, HUD, star modifiers, and planet state.
      */
     getState() {
       const nextObs = this.getNextPlanet();
       const biggest = this.biggestPlanetCleared;
       return {
+        gameTitle: this.gameTitle,
         runId: this.runId,
         status: this.status,
         mode: this.mode,
@@ -2151,9 +2961,18 @@
         bonusScore: this.bonusScore,
         highScore: this.highScore,
         planetsCleared: this.planetsCleared,
+        perfectJumps: this.perfectJumps,
+        starsCollected: this.starsCollected,
+        positiveStarsCollected: this.positiveStarsCollected,
+        negativeStarsCollected: this.negativeStarsCollected,
         streak: this.streak,
         maxStreak: this.maxStreak,
         streakMultiplier: this.streakMultiplier,
+        tonyScale: this.tonyScale,
+        jumpBoostMultiplier: this.jumpBoostMultiplier,
+        gapMultiplier: this.gapMultiplier,
+        enlargedPlanetsRemaining: this.enlargedPlanetsRemaining,
+        activeEffects: this.activeEffects.map((e) => Object.assign({}, e)),
         speed: this.speed,
         mach: this.mach,
         debugHitboxes: this.debugHitboxes,
@@ -2166,6 +2985,7 @@
           ? `${biggest.name} (${biggest.sizeTier} ${biggest.diameter}px)`
           : 'None',
         obstacles: this.obstacles.map((o) => Object.assign({}, o)),
+        collectibles: this.collectibles.map((c) => Object.assign({}, c)),
         popups: this.popups.map((p) => Object.assign({}, p)),
         runPlanetManifest: this.getRunPlanetManifest()
       };
@@ -2176,6 +2996,8 @@
   TonyGameEngine.SIZE_TIERS = SIZE_TIERS;
   TonyGameEngine.SIZE_TIER_ORDER = SIZE_TIER_ORDER;
   TonyGameEngine.DEFAULT_PLANETS = DEFAULT_PLANETS;
+  TonyGameEngine.DEFAULT_STAR_CATALOG = DEFAULT_STAR_CATALOG;
+  TonyGameEngine.STAR_CATALOG = DEFAULT_STAR_CATALOG;
   TonyGameEngine.computePlanetClearancePoints = computePlanetClearancePoints;
   TonyGameEngine.instance = null;
 
@@ -2215,8 +3037,21 @@
     return inst.jump(options);
   };
 
+  TonyGameEngine.spawnCollectibleStar = function (typeIdOrOpts, customOpts) {
+    const inst = TonyGameEngine.instance || TonyGameEngine.init();
+    return inst.spawnCollectibleStar(typeIdOrOpts, customOpts);
+  };
+
+  TonyGameEngine.collectStar = function (starObjOrId) {
+    const inst = TonyGameEngine.instance || TonyGameEngine.init();
+    return inst.collectStar(starObjOrId);
+  };
+
   if (root) {
     root.TonyGameEngine = TonyGameEngine;
+    if (!root.STAR_CATALOG) {
+      root.STAR_CATALOG = DEFAULT_STAR_CATALOG;
+    }
   }
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = TonyGameEngine;

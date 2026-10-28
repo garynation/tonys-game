@@ -1,7 +1,9 @@
 services:
-  tonys-game:
+  galactic-sheep:
     build: .
-    container_name: tonys-jumping-game
+    container_name: galactic-sheep
     ports:
       - "8765:80"
+    volumes:
+      - ./data:/app/data
     restart: unless-stopped

@@ -6,8 +6,8 @@
   <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>Tony's Jumping Game</title>
-  <link rel="stylesheet" href="styles.css?v=3" />
+  <title>Galactic Sheep</title>
+  <link rel="stylesheet" href="styles.css?v=4" />
 </head>
 <body>
   <!-- Top App Bar -->
@@ -18,11 +18,11 @@
       </div>
       <div class="brand-title-group">
         <h1 class="app-title game-title">
-          <span>Tony's Jumping Game</span>
+          <span>Galactic Sheep</span>
           <span class="arcade-edition-pill">COSMIC ARCADE</span>
         </h1>
         <p class="app-subtitle">
-          Help <strong>Tony the Sheep</strong> leap across randomized solar system planets — bigger planets demand tighter launch timing &amp; award massive bonus points!
+          Help <strong>Tony the Galactic Sheep</strong> leap across randomized solar system planets, nail <strong>Perfect Jump Timing</strong>, and snatch floating cosmic stars!
         </p>
       </div>
     </div>
@@ -70,12 +70,12 @@
           <span id="hud-planets-cleared" class="hud-metric-value">0</span>
         </div>
         <div class="hud-metric">
-          <span class="hud-metric-label">Clean Streak</span>
-          <span id="hud-streak" class="hud-metric-value streak-hot">1.0x (0)</span>
+          <span class="hud-metric-label">Perfect Jumps</span>
+          <span id="hud-perfect-jumps" class="hud-metric-value perfect-jumps">0</span>
         </div>
         <div class="hud-metric">
-          <span class="hud-metric-label">Orbital Speed</span>
-          <span id="hud-speed" class="hud-metric-value speed-mach">MACH 1.0x</span>
+          <span class="hud-metric-label">Clean Streak</span>
+          <span id="hud-streak" class="hud-metric-value streak-hot">1.0x (0)</span>
         </div>
         <div class="hud-metric">
           <span class="hud-metric-label">Approaching</span>
@@ -83,9 +83,16 @@
         </div>
       </section>
 
+      <!-- Active Star Effects & Perfect Jumps Status Strip -->
+      <div id="active-effects-strip" class="active-effects-strip" aria-label="Active star effects and perfect jump telemetry">
+        <span class="active-effect-pill is-gold">⚡ Perfect Jumps: 0</span>
+        <span class="active-effect-pill is-neutral">★ Stars Collected: <span id="hud-stars-collected">0</span></span>
+        <span class="active-effect-pill is-neutral" id="hud-speed">MACH 1.0x</span>
+      </div>
+
       <!-- Primary 60fps HTML5 Canvas Stage -->
       <div id="game-canvas-container" class="canvas-stage-wrapper">
-        <canvas id="game-canvas" width="960" height="460" aria-label="Tony's Jumping Game Canvas — Press Spacebar to Jump"></canvas>
+        <canvas id="game-canvas" width="960" height="460" aria-label="Galactic Sheep Canvas — Press Spacebar to Jump"></canvas>
       </div>
 
       <!-- Stage Controls & Precision Timing Legend Strip -->
@@ -95,7 +102,7 @@
             <span class="kbd-hint">SPACE</span>
             <span>/</span>
             <span class="kbd-hint">↑</span>
-            <span>or Click Canvas: <strong>Jump / Launch Run</strong> (hold slightly or hit the green <strong>Optimal Launch Zone</strong> for maximum apex!)</span>
+            <span>or Click Canvas: <strong>Jump / Launch Run</strong> (jump from the green <strong>Optimal Launch Zone</strong> for <strong>⚡ Perfect Timing Bonus +150..+350 pts!</strong>)</span>
           </span>
         </div>
         <div class="control-pill-group">
@@ -162,24 +169,107 @@
           </div>
         </div>
       </section>
+
+      <!-- Surprise Floating Star Collectibles Guide (3 Positive & 3 Negative Hazard Stars) -->
+      <section id="star-guide-panel" class="star-strip-card surface-card" aria-labelledby="star-guide-heading">
+        <div class="section-header-row">
+          <div>
+            <h2 id="star-guide-heading" class="section-title">
+              <span class="material-symbols-outlined">⭐</span>
+              <span>Surprise Floating Star Collectibles</span>
+              <span class="tier-badge tier-MINI">3 POSITIVE BUFFS</span>
+              <span class="tier-badge tier-COLOSSAL">3 HAZARD DEBUFFS</span>
+            </h2>
+            <p class="section-subtitle" style="margin: 2px 0 0;">
+              Time Tony's jump arc to snatch glowing <strong>Positive Stars</strong> in mid-air while dodging dangerous <strong>Hazard Stars</strong>!
+            </p>
+          </div>
+        </div>
+
+        <div id="star-legend-grid" class="star-legend-grid" role="list" aria-label="Floating collectible stars guide">
+          <div class="star-legend-card star-card-positive" data-star-id="GOLD_SUPERNOVA">
+            <div class="star-icon-swatch" style="color:#FFD700;text-shadow:0 0 10px #FFD700;">★</div>
+            <div class="star-card-body">
+              <div class="star-card-title-row">
+                <span class="star-card-name">Gold Supernova</span>
+                <span class="tier-badge tier-MINI">+500 PTS</span>
+              </div>
+              <div class="star-card-desc"><strong>POSITIVE STAR (LARGE):</strong> Instant +500 bonus points!</div>
+            </div>
+          </div>
+          <div class="star-legend-card star-card-positive" data-star-id="CYAN_PULSAR">
+            <div class="star-icon-swatch" style="color:#00E5FF;text-shadow:0 0 10px #00E5FF;">★</div>
+            <div class="star-card-body">
+              <div class="star-card-title-row">
+                <span class="star-card-name">Cyan Pulsar</span>
+                <span class="tier-badge tier-MINI">HIGH JUMP</span>
+              </div>
+              <div class="star-card-desc"><strong>POSITIVE STAR (MEDIUM):</strong> Higher jumps (+25% apex) for 10s &amp; +250 pts!</div>
+            </div>
+          </div>
+          <div class="star-legend-card star-card-positive" data-star-id="EMERALD_QUASAR">
+            <div class="star-icon-swatch" style="color:#2ECC71;text-shadow:0 0 10px #2ECC71;">★</div>
+            <div class="star-card-body">
+              <div class="star-card-title-row">
+                <span class="star-card-name">Emerald Quasar</span>
+                <span class="tier-badge tier-MINI">MINI + WIDE GAP</span>
+              </div>
+              <div class="star-card-desc"><strong>POSITIVE STAR (MINI):</strong> Makes Tony smaller (0.68x) &amp; widens planet gaps (+30%) for 10s!</div>
+            </div>
+          </div>
+          <div class="star-legend-card star-card-negative" data-star-id="CRIMSON_DWARF">
+            <div class="star-icon-swatch" style="color:#FF3366;text-shadow:0 0 10px #FF3366;">★</div>
+            <div class="star-card-body">
+              <div class="star-card-title-row">
+                <span class="star-card-name">Crimson Dwarf</span>
+                <span class="tier-badge tier-COLOSSAL">BIG SHEEP + TIGHT GAP</span>
+              </div>
+              <div class="star-card-desc"><strong>HAZARD STAR (LARGE):</strong> Makes Tony bigger (1.38x), narrows planet gaps (-10%), &amp; -150 pts!</div>
+            </div>
+          </div>
+          <div class="star-legend-card star-card-negative" data-star-id="VIOLET_NOVA">
+            <div class="star-icon-swatch" style="color:#C77DFF;text-shadow:0 0 10px #C77DFF;">★</div>
+            <div class="star-card-body">
+              <div class="star-card-title-row">
+                <span class="star-card-name">Violet Hazard Nova</span>
+                <span class="tier-badge tier-COLOSSAL">5x GIANT PLANETS -300</span>
+              </div>
+              <div class="star-card-desc"><strong>HAZARD STAR (COLOSSAL):</strong> Next 5 planets in a row grow larger (+32%) &amp; loses 300 pts!</div>
+            </div>
+          </div>
+          <div class="star-legend-card star-card-negative" data-star-id="AMBER_ECLIPSE">
+            <div class="star-icon-swatch" style="color:#FF7B00;text-shadow:0 0 10px #FF7B00;">★</div>
+            <div class="star-card-body">
+              <div class="star-card-title-row">
+                <span class="star-card-name">Amber Eclipse</span>
+                <span class="tier-badge tier-COLOSSAL">TIGHT GAPS -200</span>
+              </div>
+              <div class="star-card-desc"><strong>HAZARD STAR (SMALL):</strong> Narrows planet gaps slightly (-9%) for 8s &amp; loses 200 pts!</div>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
 
-    <!-- Right Rail: Retro Arcade High Score Cabinet & Live Telemetry -->
-    <aside class="cabinet-column" aria-label="Retro Arcade High Score Leaderboard">
+    <!-- Right Rail: Centralised Household High Score Cabinet & Live Telemetry -->
+    <aside class="cabinet-column" aria-label="Galactic Sheep Shared Leaderboard">
       <section id="high-score-cabinet" class="arcade-cabinet-card" aria-labelledby="arcade-cabinet-heading">
         <div class="arcade-marquee-header">
           <div>
             <h2 id="arcade-cabinet-heading" class="arcade-marquee-title">HIGH SCORES · TOP 10</h2>
-            <div class="arcade-marquee-sub">GALACTIC SHEEP HALL OF FAME</div>
+            <div class="arcade-marquee-sub">
+              <span>GALACTIC SHEEP HALL OF FAME</span>
+              <span id="server-sync-badge" class="server-sync-badge">LIVE SERVER SYNC</span>
+            </div>
           </div>
-          <button type="button" id="btn-open-initials" class="btn-arcade" title="Log Your Name &amp; Score to the Arcade Board">
+          <button type="button" id="btn-open-initials" class="btn-arcade" title="Log Your Name &amp; Score to the Shared Leaderboard">
             <span class="material-symbols-outlined">✎</span>
             <span>Log Score</span>
           </button>
         </div>
 
         <div class="arcade-table-wrapper">
-          <table class="arcade-score-table" id="high-score-table" aria-label="Top 10 Retro Arcade High Scores">
+          <table class="arcade-score-table" id="high-score-table" aria-label="Top 10 Galactic Sheep High Scores">
             <thead>
               <tr>
                 <th scope="col">RANK</th>
@@ -196,7 +286,7 @@
         </div>
 
         <div class="arcade-cabinet-footer">
-          <span class="section-subtitle">Saved in browser storage</span>
+          <span class="section-subtitle">Shared household server board</span>
           <button type="button" id="btn-reset-scores" class="btn-arcade" title="Immediately Clear All High Scores">
             <span class="material-symbols-outlined">↺</span>
             <span>Clear Board</span>
@@ -204,14 +294,14 @@
         </div>
       </section>
 
-      <!-- Live Planet Clearance Telemetry Feed -->
+      <!-- Live Planet Clearance, Perfect Jumps & Star Collectibles Feed -->
       <section class="surface-card" aria-labelledby="telemetry-heading">
         <div class="section-header-row" style="margin-bottom: 8px;">
           <h2 id="telemetry-heading" class="section-title">
             <span class="material-symbols-outlined">⚡</span>
-            <span>Recent Planet Jumps</span>
+            <span>Recent Jumps &amp; Star Collectibles</span>
           </h2>
-          <span class="section-subtitle">Close-call &amp; tier bonuses</span>
+          <span class="section-subtitle">Perfect jumps &amp; star powers</span>
         </div>
         <ul id="telemetry-feed-list" class="telemetry-feed-list">
           <li class="telemetry-feed-item">
@@ -231,7 +321,7 @@
     <div class="arcade-initials-dialog">
       <span id="initials-rank-badge" class="initials-header-badge">NEW HIGH SCORE!</span>
       <h2 id="initials-dialog-title" class="initials-dialog-title">ENTER PLAYER NAME</h2>
-      <p class="section-subtitle" style="margin:0;">Enter your full name or callsign for the Galactic Sheep Hall of Fame</p>
+      <p class="section-subtitle" style="margin:0;">Saved to the centralised Galactic Sheep Hall of Fame</p>
 
       <div class="initials-run-summary">
         <div class="summary-stat-box">
@@ -276,12 +366,12 @@
     </div>
   </div>
 
-  <!-- Core Game Modules (Cache-Busted v3) -->
-  <script src="assets.js?v=3"></script>
-  <script src="engine.js?v=3"></script>
-  <script src="arcade.js?v=3"></script>
+  <!-- Core Game Modules (Cache-Busted v4) -->
+  <script src="assets.js?v=4"></script>
+  <script src="engine.js?v=4"></script>
+  <script src="arcade.js?v=4"></script>
 
-  <!-- Application Integration, Legacy Storage Purge & Failsafe Wiring -->
+  <!-- Application Integration, Centralised Server Sync & Failsafe Wiring -->
   <script>
     (function () {
       'use strict';
@@ -302,9 +392,10 @@
           if (typeof localStorage === 'undefined') return;
           localStorage.removeItem('tonys_jumping_game_highscores_v1');
           localStorage.removeItem('tonys_jumping_game_highscores_v2');
-          var rawV3 = localStorage.getItem('tonys_jumping_game_highscores_v3');
-          if (rawV3) {
-            var parsed = JSON.parse(rawV3);
+          localStorage.removeItem('tonys_jumping_game_highscores_v3');
+          var rawV4 = localStorage.getItem('galactic_sheep_highscores_v4');
+          if (rawV4) {
+            var parsed = JSON.parse(rawV4);
             if (Array.isArray(parsed)) {
               var cleaned = parsed.filter(function (entry) {
                 if (!entry || typeof entry !== 'object') return false;
@@ -314,7 +405,7 @@
                 return !LEGACY_SEED_PAIRS[key];
               });
               if (cleaned.length !== parsed.length) {
-                localStorage.setItem('tonys_jumping_game_highscores_v3', JSON.stringify(cleaned));
+                localStorage.setItem('galactic_sheep_highscores_v4', JSON.stringify(cleaned));
               }
             }
           }
@@ -342,15 +433,18 @@
         return false;
       }
 
-      function initTonysJumpingGame() {
-        // 0. Always purge legacy v1/v2 seed scores before initializing UI or engine
+      function initGalacticSheep() {
+        // 0. Always purge legacy v1/v2/v3 seed scores before initializing UI or engine
         purgeLegacySeedStorage();
 
         var canvas = document.getElementById('game-canvas');
         if (!canvas || !window.TonyGameEngine || !window.TonyArcadeUI) return;
 
-        // 1. Initialize Retro Arcade High Score Table & LocalStorage first
+        // 1. Initialize Shared Leaderboard UI & fetch authoritative server board
         window.TonyArcadeUI.init();
+        if (typeof window.TonyArcadeUI.renderStarLegend === 'function') {
+          window.TonyArcadeUI.renderStarLegend();
+        }
 
         function syncControlButtons(engine) {
           if (!engine) return;
@@ -388,7 +482,7 @@
           }
         }
 
-        // 2. Instantiate 60fps Game Engine wired to TonyArcadeUI
+        // 2. Instantiate 60fps Galactic Sheep Engine wired to TonyArcadeUI
         var engine = new window.TonyGameEngine({
           canvas: canvas,
           bindKeyboard: true,
@@ -402,11 +496,16 @@
             window.TonyArcadeUI.logPlanetClear(clearedRecord);
             window.TonyArcadeUI.updateHUD(state);
           },
+          onPerfectJump: window.TonyArcadeUI.logPerfectJump,
+          onStarCollected: window.TonyArcadeUI.logStarCollected,
           onScoreChange: function (_score, state) {
             window.TonyArcadeUI.updateHUD(state);
           },
           onRunStart: function (state) {
             window.TonyArcadeUI.closeInitialsModal();
+            if (typeof window.TonyArcadeUI.fetchServerLeaderboard === 'function') {
+              window.TonyArcadeUI.fetchServerLeaderboard();
+            }
             window.TonyArcadeUI.renderPlanetScaleStrip(
               state.runPlanetManifest,
               state.nextPlanet ? state.nextPlanet.id : ''
@@ -441,6 +540,9 @@
             window.TonyArcadeUI.closeInitialsModal();
             if (engine.status === 'READY') {
               engine.rerollPlanets();
+              if (typeof window.TonyArcadeUI.fetchServerLeaderboard === 'function') {
+                window.TonyArcadeUI.fetchServerLeaderboard();
+              }
             } else {
               engine.startNewRun({ jumpOnStart: false, reroll: true });
             }
@@ -507,7 +609,8 @@
             if (typeof localStorage !== 'undefined') {
               localStorage.removeItem('tonys_jumping_game_highscores_v1');
               localStorage.removeItem('tonys_jumping_game_highscores_v2');
-              localStorage.setItem('tonys_jumping_game_highscores_v3', '[]');
+              localStorage.removeItem('tonys_jumping_game_highscores_v3');
+              localStorage.setItem('galactic_sheep_highscores_v4', '[]');
             }
           } catch (_err) {}
           if (window.TonyArcadeUI && typeof window.TonyArcadeUI.resetHighScores === 'function') {
@@ -548,9 +651,9 @@
       }
 
       if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initTonysJumpingGame);
+        document.addEventListener('DOMContentLoaded', initGalacticSheep);
       } else {
-        initTonysJumpingGame();
+        initGalacticSheep();
       }
     })();
   </script>
