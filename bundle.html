@@ -1206,11 +1206,6 @@ main.game-layout,
         <span id="label-sound">Sound: ON</span>
         <span class="kbd-hint">M</span>
       </button>
-      <button type="button" id="btn-toggle-hitboxes" class="btn-arcade" aria-pressed="false" title="Toggle Hitbox &amp; Parabolic Jump Trajectory Guide (H)">
-        <span class="material-symbols-outlined">🎯</span>
-        <span id="label-hitboxes">Trajectory / Hitbox</span>
-        <span class="kbd-hint">H</span>
-      </button>
       <button type="button" id="btn-pause" class="btn-arcade" aria-pressed="false" title="Pause / Resume Game (P)">
         <span class="material-symbols-outlined" id="icon-pause">⏸</span>
         <span id="label-pause">Pause</span>
@@ -1277,10 +1272,6 @@ main.game-layout,
           <span class="control-hint-item">
             <span class="kbd-hint">R</span>
             <span>Re-Seed Planet Sizes</span>
-          </span>
-          <span class="control-hint-item">
-            <span class="kbd-hint">H</span>
-            <span>Hitbox &amp; Arc Guide</span>
           </span>
           <span class="control-hint-item">
             <span class="kbd-hint">P</span>
@@ -1534,7 +1525,7 @@ main.game-layout,
     </div>
   </div>
 
-  <!-- Core Game Modules (Cache-Busted v4) -->
+  <!-- Core Game Modules (Cache-Busted v6) -->
   <script>
 /**
  * Galactic Sheep — Visual & Audio Assets Module (assets.js)
@@ -3607,7 +3598,7 @@ main.game-layout,
       this.isGameOver = false;
       this.isReady = true;
 
-      this.debugHitboxes = Boolean(this.options.debugHitboxes);
+      this.debugHitboxes = false;
       this.muted = Boolean(this.options.muted);
 
       // Run metrics & scoring
@@ -4655,10 +4646,9 @@ main.game-layout,
       return this.status;
     }
 
-    toggleHitboxes(forceValue) {
-      this.debugHitboxes =
-        typeof forceValue === 'boolean' ? forceValue : !this.debugHitboxes;
-      return this.debugHitboxes;
+    toggleHitboxes() {
+      this.debugHitboxes = false;
+      return false;
     }
 
     toggleMute(forceValue) {
@@ -5500,11 +5490,6 @@ main.game-layout,
       // 8. In-Canvas HUD Banner & Next Planet / Active Modifiers Pill
       this._renderCanvasOverlayHUD(ctx);
 
-      // 9. Hitbox & Jump Trajectory Debug Overlay (`H` key)
-      if (this.debugHitboxes) {
-        this._renderDebugOverlay(ctx);
-      }
-
       ctx.restore();
     }
 
@@ -6192,8 +6177,6 @@ main.game-layout,
             this.jump({ allowRestartOnGameOver: false });
           }
         }
-      } else if (key === 'h') {
-        this.toggleHitboxes();
       } else if (key === 'p') {
         this.togglePause();
       } else if (key === 'r') {
@@ -7847,12 +7830,6 @@ main.game-layout,
             if (soundLabel) soundLabel.textContent = soundOn ? 'Sound: ON' : 'Sound: OFF';
           }
 
-          var hitboxBtn = document.getElementById('btn-toggle-hitboxes');
-          if (hitboxBtn) {
-            hitboxBtn.classList.toggle('is-active', Boolean(engine.debugHitboxes));
-            hitboxBtn.setAttribute('aria-pressed', String(Boolean(engine.debugHitboxes)));
-          }
-
           var pauseBtn = document.getElementById('btn-pause');
           var pauseIcon = document.getElementById('icon-pause');
           var pauseLabel = document.getElementById('label-pause');
@@ -7961,15 +7938,6 @@ main.game-layout,
           });
         }
 
-        var btnHitboxes = document.getElementById('btn-toggle-hitboxes');
-        if (btnHitboxes) {
-          btnHitboxes.addEventListener('click', function () {
-            engine.toggleHitboxes();
-            syncControlButtons(engine);
-            btnHitboxes.blur();
-          });
-        }
-
         var btnPause = document.getElementById('btn-pause');
         if (btnPause) {
           btnPause.addEventListener('click', function () {
@@ -8011,7 +7979,7 @@ main.game-layout,
         });
 
         // 4. Ensure Spacebar restarts cleanly from GAMEOVER when not typing player name,
-        //    and sync toolbar button states whenever R / M / H / P shortcuts are pressed.
+        //    and sync toolbar button states whenever R / M / P shortcuts are pressed.
         window.addEventListener('keydown', function (e) {
           if (isInputOrModalActive(e)) return;
 
@@ -8023,7 +7991,7 @@ main.game-layout,
             if (engine.status === 'GAMEOVER') {
               engine.startNewRun({ jumpOnStart: true, reroll: true });
             }
-          } else if (key === 'r' || key === 'm' || key === 'h' || key === 'p') {
+          } else if (key === 'r' || key === 'm' || key === 'p') {
             setTimeout(function () {
               syncControlButtons(engine);
             }, 0);

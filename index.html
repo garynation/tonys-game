@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>Galactic Sheep</title>
-  <link rel="stylesheet" href="styles.css?v=5" />
+  <link rel="stylesheet" href="styles.css?v=6" />
 </head>
 <body>
   <!-- Top App Bar -->
@@ -37,11 +37,6 @@
         <span class="material-symbols-outlined" id="icon-sound">🔊</span>
         <span id="label-sound">Sound: ON</span>
         <span class="kbd-hint">M</span>
-      </button>
-      <button type="button" id="btn-toggle-hitboxes" class="btn-arcade" aria-pressed="false" title="Toggle Hitbox &amp; Parabolic Jump Trajectory Guide (H)">
-        <span class="material-symbols-outlined">🎯</span>
-        <span id="label-hitboxes">Trajectory / Hitbox</span>
-        <span class="kbd-hint">H</span>
       </button>
       <button type="button" id="btn-pause" class="btn-arcade" aria-pressed="false" title="Pause / Resume Game (P)">
         <span class="material-symbols-outlined" id="icon-pause">⏸</span>
@@ -109,10 +104,6 @@
           <span class="control-hint-item">
             <span class="kbd-hint">R</span>
             <span>Re-Seed Planet Sizes</span>
-          </span>
-          <span class="control-hint-item">
-            <span class="kbd-hint">H</span>
-            <span>Hitbox &amp; Arc Guide</span>
           </span>
           <span class="control-hint-item">
             <span class="kbd-hint">P</span>
@@ -366,10 +357,10 @@
     </div>
   </div>
 
-  <!-- Core Game Modules (Cache-Busted v4) -->
-  <script src="assets.js?v=5"></script>
-  <script src="engine.js?v=5"></script>
-  <script src="arcade.js?v=5"></script>
+  <!-- Core Game Modules (Cache-Busted v6) -->
+  <script src="assets.js?v=6"></script>
+  <script src="engine.js?v=6"></script>
+  <script src="arcade.js?v=6"></script>
 
   <!-- Application Integration, Centralised Server Sync & Failsafe Wiring -->
   <script>
@@ -457,12 +448,6 @@
             soundBtn.setAttribute('aria-pressed', String(soundOn));
             if (soundIcon) soundIcon.textContent = soundOn ? '🔊' : '🔇';
             if (soundLabel) soundLabel.textContent = soundOn ? 'Sound: ON' : 'Sound: OFF';
-          }
-
-          var hitboxBtn = document.getElementById('btn-toggle-hitboxes');
-          if (hitboxBtn) {
-            hitboxBtn.classList.toggle('is-active', Boolean(engine.debugHitboxes));
-            hitboxBtn.setAttribute('aria-pressed', String(Boolean(engine.debugHitboxes)));
           }
 
           var pauseBtn = document.getElementById('btn-pause');
@@ -573,15 +558,6 @@
           });
         }
 
-        var btnHitboxes = document.getElementById('btn-toggle-hitboxes');
-        if (btnHitboxes) {
-          btnHitboxes.addEventListener('click', function () {
-            engine.toggleHitboxes();
-            syncControlButtons(engine);
-            btnHitboxes.blur();
-          });
-        }
-
         var btnPause = document.getElementById('btn-pause');
         if (btnPause) {
           btnPause.addEventListener('click', function () {
@@ -623,7 +599,7 @@
         });
 
         // 4. Ensure Spacebar restarts cleanly from GAMEOVER when not typing player name,
-        //    and sync toolbar button states whenever R / M / H / P shortcuts are pressed.
+        //    and sync toolbar button states whenever R / M / P shortcuts are pressed.
         window.addEventListener('keydown', function (e) {
           if (isInputOrModalActive(e)) return;
 
@@ -635,7 +611,7 @@
             if (engine.status === 'GAMEOVER') {
               engine.startNewRun({ jumpOnStart: true, reroll: true });
             }
-          } else if (key === 'r' || key === 'm' || key === 'h' || key === 'p') {
+          } else if (key === 'r' || key === 'm' || key === 'p') {
             setTimeout(function () {
               syncControlButtons(engine);
             }, 0);

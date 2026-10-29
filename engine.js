@@ -360,7 +360,7 @@
       this.isGameOver = false;
       this.isReady = true;
 
-      this.debugHitboxes = Boolean(this.options.debugHitboxes);
+      this.debugHitboxes = false;
       this.muted = Boolean(this.options.muted);
 
       // Run metrics & scoring
@@ -1408,10 +1408,9 @@
       return this.status;
     }
 
-    toggleHitboxes(forceValue) {
-      this.debugHitboxes =
-        typeof forceValue === 'boolean' ? forceValue : !this.debugHitboxes;
-      return this.debugHitboxes;
+    toggleHitboxes() {
+      this.debugHitboxes = false;
+      return false;
     }
 
     toggleMute(forceValue) {
@@ -2253,11 +2252,6 @@
       // 8. In-Canvas HUD Banner & Next Planet / Active Modifiers Pill
       this._renderCanvasOverlayHUD(ctx);
 
-      // 9. Hitbox & Jump Trajectory Debug Overlay (`H` key)
-      if (this.debugHitboxes) {
-        this._renderDebugOverlay(ctx);
-      }
-
       ctx.restore();
     }
 
@@ -2945,8 +2939,6 @@
             this.jump({ allowRestartOnGameOver: false });
           }
         }
-      } else if (key === 'h') {
-        this.toggleHitboxes();
       } else if (key === 'p') {
         this.togglePause();
       } else if (key === 'r') {

@@ -56,6 +56,5 @@ gcloud run deploy galactic-sheep \
 | :--- | :--- |
 | `Space` / `ArrowUp` / Click | Jump / Launch Run (hit the green **Optimal Launch Zone** for **Perfect Timing Bonus!**) |
 | `R` | Re-Randomize Planet Sizes / New Run |
-| `H` | Toggle Hitbox & Jump Trajectory Guide |
 | `M` | Toggle Retro Synth Audio |
 | `P` | Pause / Resume |
