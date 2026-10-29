@@ -388,12 +388,15 @@
       this.maxStreak = 0;
       this.streakMultiplier = 1.0;
 
-      // Dynamic Star Modifiers
+      // Dynamic Star Modifiers & Natural Spawn Scheduler
       this.tonyScale = 1.0;
       this.jumpBoostMultiplier = 1.0;
       this.gapMultiplier = 1.0;
       this.enlargedPlanetsRemaining = 0;
       this.activeEffects = [];
+      this.nextStarSpawnCooldownMs = 4800 + Math.random() * 5200;
+      this.naturalStarsSpawnedThisRun = 0;
+      this.lastNaturalStarId = null;
 
       this.speed = this.physics.baseSpeed;
       this.mach = 1.0;
@@ -818,29 +821,17 @@
       this.popups.length = 0;
       this.particles.length = 0;
       this.launchRings.length = 0;
+      this.nextStarSpawnCooldownMs = 4800 + Math.random() * 5200;
+      this.naturalStarsSpawnedThisRun = 0;
 
       if (spawnInitialObstacles) {
         const firstX = Math.max(660, Math.round(this.width * 0.72));
         const first = this.spawnPlanet({ x: firstX });
         const secondGap = Math.round((480 + first.radius * 2 + randomInt(60, 120)) * this.gapMultiplier);
-        const second = this.spawnPlanet({ x: firstX + secondGap });
-
-        // Spawn initial surprise floating collectible stars at jump-reachable heights
-        this.spawnCollectibleStar(null, {
-          x: Math.round((firstX + this.tony.x) * 0.56),
-          y: this.groundY - 135
-        });
-        this.spawnCollectibleStar(null, {
-          x: Math.round((first.x + second.x) * 0.5),
-          y: this.groundY - 150
-        });
+        this.spawnPlanet({ x: firstX + secondGap });
       } else {
         const previewX = Math.round(this.width * 0.76);
         this.spawnPlanet({ x: previewX });
-        this.spawnCollectibleStar('GOLD_SUPERNOVA', {
-          x: Math.round(this.width * 0.48),
-          y: this.groundY - 140
-        });
       }
     }
 
@@ -998,24 +989,64 @@
       }
 
       if (!template) {
-        // 58% chance positive star, 42% chance negative hazard star for exciting gameplay
-        const wantPositive = Math.random() < 0.58;
-        const pool = catalog.filter((s) =>
-          wantPositive ? s.category === 'positive' : s.category === 'negative'
+        // Weighted random selection across all 6 Positive & Negative stars,
+        // ensuring no two consecutive naturally spawned stars are identical
+        const wantPositive = Math.random() < 0.56;
+        let pool = catalog.filter(
+          (s) =>
+            (wantPositive ? s.category === 'positive' : s.category === 'negative') &&
+            s.id !== this.lastNaturalStarId
         );
+        if (pool.length === 0) {
+          pool = catalog.filter((s) => s.id !== this.lastNaturalStarId);
+        }
         const source = pool.length > 0 ? pool : catalog;
         template = source[Math.floor(Math.random() * source.length)] || DEFAULT_STAR_CATALOG[0];
       }
 
+      this.lastNaturalStarId = template.id;
+
+      // Randomize placement mode: mid-gap between planets, high over a small/medium planet's crest,
+      // or slightly past a planet's landing zone
+      const placementModes = ['MID_GAP', 'HIGH_CREST', 'POST_LANDING'];
+      const placementMode =
+        opts.placementMode || placementModes[Math.floor(Math.random() * placementModes.length)];
+
       let spawnX = opts.x;
+      let defaultY = this.groundY - randomInt(95, 190);
+
       if (typeof spawnX !== 'number') {
-        const lastStar = this.collectibles[this.collectibles.length - 1];
-        const minStarX = lastStar ? lastStar.x + randomInt(380, 620) : this.width + randomInt(140, 320);
-        spawnX = Math.max(this.width + 60, minStarX);
+        const farObstacles = this.obstacles.filter((o) => !o.cleared && o.x > this.width * 0.65);
+        if (placementMode === 'HIGH_CREST' && farObstacles.length > 0) {
+          const targetObs =
+            farObstacles.find((o) => o.sizeTier !== 'COLOSSAL') ||
+            farObstacles[farObstacles.length - 1];
+          spawnX = Math.max(this.width + 60, targetObs.x + randomInt(-28, 28));
+          defaultY = this.groundY - randomInt(152, 190);
+        } else if (placementMode === 'POST_LANDING' && farObstacles.length > 0) {
+          const targetObs = farObstacles[farObstacles.length - 1];
+          spawnX = Math.max(
+            this.width + 60,
+            targetObs.x + targetObs.radius + randomInt(95, 175)
+          );
+          defaultY = this.groundY - randomInt(95, 155);
+        } else if (farObstacles.length >= 2) {
+          const p1 = farObstacles[farObstacles.length - 2];
+          const p2 = farObstacles[farObstacles.length - 1];
+          spawnX = Math.max(
+            this.width + 60,
+            Math.round((p1.x + p2.x) * 0.5) + randomInt(-65, 65)
+          );
+          defaultY = this.groundY - randomInt(105, 185);
+        } else {
+          const lastStar = this.collectibles[this.collectibles.length - 1];
+          const minStarX = lastStar
+            ? lastStar.x + randomInt(650, 1200)
+            : this.width + randomInt(120, 420);
+          spawnX = Math.max(this.width + 60, minStarX);
+        }
       }
 
-      // Always float in mid-air above groundY (jump-reachable altitudes: groundY - 105 to groundY - 185)
-      const defaultY = this.groundY - randomInt(110, 178);
       const baseY =
         typeof opts.y === 'number'
           ? Math.min(this.groundY - 48, Math.max(48, opts.y))
@@ -1042,12 +1073,13 @@
         durationSec: template.durationSec || 0,
         shortTag: template.shortTag || '',
         description: template.description || '',
+        placementMode: placementMode,
         x: spawnX,
         y: baseY,
         baseY: baseY,
         floatPhase: Math.random() * Math.PI * 2,
-        floatSpeed: 0.065 + Math.random() * 0.03,
-        floatAmp: 8 + Math.random() * 6,
+        floatSpeed: 0.042 + Math.random() * 0.058,
+        floatAmp: 6 + Math.random() * 11,
         rotation: Math.random() * Math.PI * 2,
         rotationSpeed: (template.category === 'negative' ? -0.035 : 0.03) * (Math.random() > 0.5 ? 1 : -1),
         collected: false
@@ -2002,15 +2034,41 @@
         this.spawnPlanet();
       }
 
-      while (this.collectibles.length < 2) {
-        this.spawnCollectibleStar();
-      }
+      this._maybeSpawnNaturalSurpriseStar(clampedDt);
 
       if (this.frameCount % 3 === 0) {
         this._syncExternalHUD();
       }
 
       return this.getState();
+    }
+
+    /**
+     * Spawns natural surprise collectible stars rarely (roughly once every 8–18 seconds),
+     * capped at 1 natural star on screen at once, with a 32% probability gate and
+     * 3.5s–7.5s jitter delay when a roll misses.
+     */
+    _maybeSpawnNaturalSurpriseStar(dtMs) {
+      if (this.elapsedRunMs < 3500) return;
+      if (this.collectibles.length >= 1) return;
+
+      this.nextStarSpawnCooldownMs -= dtMs;
+      if (this.nextStarSpawnCooldownMs > 0) return;
+
+      // 32% probability gate per window (with fallback after 15s if 0 natural stars have spawned yet)
+      const forceFirstSurprise =
+        this.naturalStarsSpawnedThisRun === 0 && this.elapsedRunMs >= 15000;
+      const rollPassed = forceFirstSurprise || Math.random() < 0.32;
+
+      if (rollPassed) {
+        this.spawnCollectibleStar();
+        this.naturalStarsSpawnedThisRun += 1;
+        // Wide randomized cooldown (7.5s to 18.5s) after this star clears the screen
+        this.nextStarSpawnCooldownMs = 7500 + Math.random() * 11000;
+      } else {
+        // Missed roll: add 3.5s to 7.5s randomized jitter before next roll
+        this.nextStarSpawnCooldownMs = 3500 + Math.random() * 4000;
+      }
     }
 
     _updateActiveEffects(dtMs) {
