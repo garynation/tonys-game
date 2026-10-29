@@ -1,6 +1,6 @@
 # Galactic Sheep 🐑🪐⭐
 
-A modern browser-based cosmic endless runner starring **Tony the Galactic Sheep**. Leap across randomized solar system planets with precision takeoff timing, snatch floating cosmic stars with positive and negative powers, and compete across the household on a centralized multi-player arcade leaderboard!
+A modern browser-based cosmic endless runner starring **Tony the Galactic Sheep**. Leap across randomized solar system planets with precision takeoff timing, snatch floating cosmic stars with positive and negative powers, and compete across the household (or on Cloud Run) on a centralized multi-player arcade leaderboard!
 
 ## Key Features
 
@@ -14,30 +14,40 @@ A modern browser-based cosmic endless runner starring **Tony the Galactic Sheep*
     - 💠 **Cyan Pulsar (`MEDIUM`, Cyan)**: **Higher Jumps (`1.25x` apex)** for `10s` + **`+250 PTS`**.
     - 💚 **Emerald Quasar (`MINI`, Emerald)**: **Mini Tony (`0.68x` size) & Wider Planet Gaps (`+30%`)** for `10s` + **`+300 PTS`**.
   - **Negative Hazard Stars**:
-    -  Crimson Dwarf (`LARGE`, Crimson): **Big Tony (`1.38x` size), Tighter Planet Gaps (`-10%`)** for `8s` & **`-150 PTS`**.
+    - 🔴 **Crimson Dwarf (`LARGE`, Crimson)**: **Big Tony (`1.38x` size), Tighter Planet Gaps (`-10%`)** for `8s` & **`-150 PTS`**.
     - 🟣 **Violet Hazard Nova (`COLOSSAL`, Violet)**: **Next 5 Planets in a Row Grow Larger (`+32%` radius)** & **`-300 PTS`**.
     - 🟠 **Amber Eclipse (`SMALL`, Amber)**: **Tighter Planet Gaps (`-9%`)** for `8s` & **`-200 PTS`**.
 - **8 Solar System Planets & Per-Run Randomized Sizes**:
   - **Mercury**, **Venus**, **Earth**, **Mars**, **Jupiter**, **Saturn** (tilted ring system), **Uranus** (vertical ring system), and **Neptune** randomized on every run across `MINI`, `SMALL`, `MEDIUM`, `LARGE`, and `COLOSSAL` tiers (`+100` to `+1000+ pts`).
-- **Centralised Multi-Player Household Leaderboard (`server.py` + `arcade.js`)**:
-  - Backed by `GET / POST / DELETE /api/leaderboard` and persisted in `data/leaderboard.json`.
-  - Syncs automatically at the start of every game run (and every 4 seconds in the background) so everyone playing across the house sees live high scores.
-  - Automatically records each completed run's score to the server at Game Over and lets players enter or update their full name (`#arcade-player-name-input`, up to 24 characters).
+- **Hybrid On-Prem + Google Cloud Firestore Leaderboard (`server.py` + `arcade.js`)**:
+  - **On-Prem / Linux Docker (`local` mode)**: Automatically uses `/app/data/leaderboard.json` + an in-memory RAM read cache (`0` disk reads on `GET /api/leaderboard`).
+  - **Google Cloud Run (`firestore` mode)**: Automatically activates when `FIRESTORE_PROJECT` is set (or when running on Cloud Run `K_SERVICE`). Uses the Firestore v1 REST API + Cloud Run Metadata Server OAuth2 token (zero external `pip` packages) with optimistic concurrency (`updateTime` precondition retry) and a 5-second in-memory read cache so it stays 100% inside the `$0/month` Firestore free tier.
 
 ## Quick Start
 
-### Python Server (Recommended for Multi-Player Leaderboard)
+### 1. On-Prem / Linux Box (Docker GHCR Container)
 
 ```bash
-python3 server.py --port 8765
-# Open http://localhost:8765/index.html
+docker pull ghcr.io/garynation/tonys-game:latest && \
+docker rm -f tonys-jumping-game && \
+docker run -d \
+  --name tonys-jumping-game \
+  --restart unless-stopped \
+  -p 8765:80 \
+  -v galactic_sheep_data:/app/data \
+  ghcr.io/garynation/tonys-game:latest
 ```
 
-### Docker Compose
+### 2. Google Cloud Run + Firestore (Same Container Image)
+
+Ensure the Firestore API (`firestore.googleapis.com`) is enabled with a `(default)` Native-mode database in your project, and that the Cloud Run runtime service account has `roles/datastore.user`:
 
 ```bash
-docker compose up -d --build
-# Open http://localhost:8765/index.html (scores persist in ./data/leaderboard.json)
+gcloud run deploy galactic-sheep \
+  --image ghcr.io/garynation/tonys-game:latest \
+  --port 80 \
+  --allow-unauthenticated \
+  --set-env-vars="FIRESTORE_PROJECT=YOUR_GCP_PROJECT_ID"
 ```
 
 ## Controls
