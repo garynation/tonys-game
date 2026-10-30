@@ -424,24 +424,8 @@
   }
 
   async function clearServerLeaderboard() {
-    if (!canUseServerApi()) return false;
-    try {
-      const resp = await fetch(API_URL, {
-        method: 'DELETE',
-        cache: 'no-store',
-        headers: { 'Accept': 'application/json' }
-      });
-      if (resp.ok) return true;
-    } catch (_err) {}
-    try {
-      const resp2 = await fetch(`${API_URL}/clear`, {
-        method: 'POST',
-        cache: 'no-store',
-        headers: { 'Accept': 'application/json' }
-      });
-      return resp2.ok;
-    } catch (_err) {}
-    return false;
+    // Safe no-op: players cannot wipe the shared household leaderboard.
+    return getHighScores();
   }
 
   function startServerPolling(intervalMs = 4000) {
@@ -455,43 +439,11 @@
   }
 
   /**
-   * Immediately clears all high scores locally AND on the centralized server (/api/leaderboard)
+   * Safe no-op: preserves existing player scores in state.scores, localStorage, and /api/leaderboard
+   * so players cannot wipe the shared household leaderboard.
    */
   function resetHighScores() {
-    state.lastSubmittedId = null;
-    state.pendingRunEntryId = null;
-    state.bestSessionScore = 0;
-    state.scores = [];
-    saveHighScores([]);
-    syncEngineHighScore(0);
-
-    renderHighScoreTable([]);
-    updateHighScoreDisplay(0, true);
-
-    const clearPromise = clearServerLeaderboard();
-
-    if (typeof document !== 'undefined') {
-      const resetBtn = byId('btn-reset-scores', 'reset-high-scores-btn');
-      if (resetBtn) {
-        if (state.resetToastTimer) {
-          clearTimeout(state.resetToastTimer);
-        }
-        resetBtn.classList.add('is-cleared-toast');
-        resetBtn.innerHTML = '<span class="material-symbols-outlined">✓</span><span>Board Cleared</span>';
-        state.resetToastTimer = setTimeout(() => {
-          resetBtn.classList.remove('is-cleared-toast');
-          resetBtn.innerHTML = '<span class="material-symbols-outlined">↺</span><span>Clear Board</span>';
-          state.resetToastTimer = null;
-        }, 1500);
-      }
-    }
-
-    if (global.TONY_ASSETS && global.TONY_ASSETS.TONY_AUDIO && typeof global.TONY_ASSETS.TONY_AUDIO.playButton === 'function') {
-      global.TONY_ASSETS.TONY_AUDIO.playButton();
-    }
-    const result = state.scores;
-    result.serverPromise = clearPromise;
-    return result;
+    return getHighScores();
   }
 
   function getTopScore() {
@@ -1287,27 +1239,9 @@
         oldCrtBtn.remove();
       }
 
-      if (!window.__tonyArcadeResetDelegated) {
-        window.__tonyArcadeResetDelegated = true;
-        document.addEventListener('click', (e) => {
-          const btn = e.target && typeof e.target.closest === 'function'
-            ? e.target.closest('#btn-reset-scores, #reset-high-scores-btn')
-            : null;
-          if (btn) {
-            e.preventDefault();
-            e.stopPropagation();
-            resetHighScores();
-          }
-        }, true);
-      }
-
-      const resetBtn = byId('btn-reset-scores', 'reset-high-scores-btn');
-      if (resetBtn && !resetBtn.dataset.bound) {
-        resetBtn.dataset.bound = 'true';
-        resetBtn.addEventListener('click', (e) => {
-          e.preventDefault();
-          resetHighScores();
-        });
+      const oldResetBtn = byId('btn-reset-scores', 'reset-high-scores-btn');
+      if (oldResetBtn && typeof oldResetBtn.remove === 'function') {
+        oldResetBtn.remove();
       }
 
       syncEngineHighScore(getTopScore());

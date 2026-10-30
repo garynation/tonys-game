@@ -7,7 +7,7 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>Galactic Sheep</title>
-  <link rel="stylesheet" href="styles.css?v=6" />
+  <link rel="stylesheet" href="styles.css?v=7" />
 </head>
 <body>
   <!-- Top App Bar -->
@@ -278,10 +278,6 @@
 
         <div class="arcade-cabinet-footer">
           <span class="section-subtitle">Shared household server board</span>
-          <button type="button" id="btn-reset-scores" class="btn-arcade" title="Immediately Clear All High Scores">
-            <span class="material-symbols-outlined">↺</span>
-            <span>Clear Board</span>
-          </button>
         </div>
       </section>
 
@@ -357,10 +353,10 @@
     </div>
   </div>
 
-  <!-- Core Game Modules (Cache-Busted v6) -->
-  <script src="assets.js?v=6"></script>
-  <script src="engine.js?v=6"></script>
-  <script src="arcade.js?v=6"></script>
+  <!-- Core Game Modules (Cache-Busted v7) -->
+  <script src="assets.js?v=7"></script>
+  <script src="engine.js?v=7"></script>
+  <script src="arcade.js?v=7"></script>
 
   <!-- Application Integration, Centralised Server Sync & Failsafe Wiring -->
   <script>
@@ -575,28 +571,6 @@
             btnOpenInitials.blur();
           });
         }
-
-        // Document-level failsafe for Clear Board (#btn-reset-scores)
-        document.addEventListener('click', function (e) {
-          var resetBtn = e.target && e.target.closest ? e.target.closest('#btn-reset-scores, #reset-high-scores-btn') : null;
-          if (!resetBtn) return;
-          e.preventDefault();
-          try {
-            if (typeof localStorage !== 'undefined') {
-              localStorage.removeItem('tonys_jumping_game_highscores_v1');
-              localStorage.removeItem('tonys_jumping_game_highscores_v2');
-              localStorage.removeItem('tonys_jumping_game_highscores_v3');
-              localStorage.setItem('galactic_sheep_highscores_v4', '[]');
-            }
-          } catch (_err) {}
-          if (window.TonyArcadeUI && typeof window.TonyArcadeUI.resetHighScores === 'function') {
-            window.TonyArcadeUI.resetHighScores();
-          }
-          engine.highScore = 0;
-          var hiEl = document.getElementById('hud-high-score');
-          if (hiEl) hiEl.textContent = 'HI 000000';
-          if (typeof resetBtn.blur === 'function') resetBtn.blur();
-        });
 
         // 4. Ensure Spacebar restarts cleanly from GAMEOVER when not typing player name,
         //    and sync toolbar button states whenever R / M / P shortcuts are pressed.
