@@ -1521,7 +1521,7 @@ main.game-layout,
     </div>
   </div>
 
-  <!-- Core Game Modules (Cache-Busted v7) -->
+  <!-- Core Game Modules (Cache-Busted v8) -->
   <script>
 /**
  * Galactic Sheep — Visual & Audio Assets Module (assets.js)
@@ -6759,6 +6759,9 @@ main.game-layout,
       const data = await resp.json();
       if (data && Array.isArray(data.scores)) {
         updateServerStatusBadge(true);
+        if (data.entry && data.entry.id) {
+          state.lastSubmittedId = data.entry.id;
+        }
         const serverScores = saveHighScores(data.scores);
         syncEngineHighScore(getTopScore());
         renderHighScoreTable(serverScores);

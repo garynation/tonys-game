@@ -1,6 +1,6 @@
 # Galactic Sheep 🐑🪐⭐
 
-A modern browser-based cosmic endless runner starring **Tony the Galactic Sheep**. Leap across randomized solar system planets with precision takeoff timing, snatch floating cosmic stars with positive and negative powers, and compete across the household (or on Cloud Run) on a centralized multi-player arcade leaderboard!
+A modern browser-based cosmic endless runner starring **Tony the Galactic Sheep** (`https://galacticsheep.co.uk`). Leap across randomized solar system planets with precision takeoff timing, snatch floating cosmic stars with positive and negative powers, and compete across the household or on Google Cloud Run on a centralized multi-player arcade leaderboard!
 
 ## Key Features
 
@@ -19,17 +19,18 @@ A modern browser-based cosmic endless runner starring **Tony the Galactic Sheep*
     - 🟠 **Amber Eclipse (`SMALL`, Amber)**: **Tighter Planet Gaps (`-9%`)** for `8s` & **`-200 PTS`**.
 - **8 Solar System Planets & Per-Run Randomized Sizes**:
   - **Mercury**, **Venus**, **Earth**, **Mars**, **Jupiter**, **Saturn** (tilted ring system), **Uranus** (vertical ring system), and **Neptune** randomized on every run across `MINI`, `SMALL`, `MEDIUM`, `LARGE`, and `COLOSSAL` tiers (`+100` to `+1000+ pts`).
-- **Hybrid On-Prem + Google Cloud Firestore Leaderboard (`server.py` + `arcade.js`)**:
+- **Hardened Hybrid On-Prem + Google Cloud Firestore Leaderboard (`server.py` + `arcade.js`)**:
   - **On-Prem / Linux Docker (`local` mode)**: Automatically uses `/app/data/leaderboard.json` + an in-memory RAM read cache (`0` disk reads on `GET /api/leaderboard`).
   - **Google Cloud Run (`firestore` mode)**: Automatically activates when `FIRESTORE_PROJECT` is set (or when running on Cloud Run `K_SERVICE`). Uses the Firestore v1 REST API + Cloud Run Metadata Server OAuth2 token (zero external `pip` packages) with optimistic concurrency (`updateTime` precondition retry) and a 5-second in-memory read cache so it stays 100% inside the `$0/month` Firestore free tier.
+  - **Security Hardening (`v8`)**: Non-root container execution (`UID 10001`), static file allowlist, `4 KB` request payload cap, per-IP rate limiting (`12 POSTs/min`), server-side score plausibility validation, one-way hashed public entry IDs, CSP / `X-Frame-Options: DENY` / `nosniff` headers, and Origin-restricted CORS (`https://galacticsheep.co.uk`, `https://www.galacticsheep.co.uk`, Cloud Run, and local LAN).
 
 ## Quick Start
 
-### 1. On-Prem / Linux Box (Docker GHCR Container)
+### 1. On-Prem / Linux Box (Docker GHCR Container — Same Unified Image)
 
 ```bash
 docker pull ghcr.io/garynation/tonys-game:latest && \
-docker rm -f tonys-jumping-game && \
+docker rm -f tonys-jumping-game 2>/dev/null || true && \
 docker run -d \
   --name tonys-jumping-game \
   --restart unless-stopped \
@@ -38,17 +39,17 @@ docker run -d \
   ghcr.io/garynation/tonys-game:latest
 ```
 
-### 2. Google Cloud Run + Firestore (Same Container Image)
+### 2. Google Cloud Run + Firestore + `galacticsheep.co.uk` (One-Shot Bootstrap)
 
-Ensure the Firestore API (`firestore.googleapis.com`) is enabled with a `(default)` Native-mode database in your project, and that the Cloud Run runtime service account has `roles/datastore.user`:
+In your personal [Google Cloud Shell](https://console.cloud.google.com/?cloudshell=true), run:
 
 ```bash
-gcloud run deploy galactic-sheep \
-  --image ghcr.io/garynation/tonys-game:latest \
-  --port 80 \
-  --allow-unauthenticated \
-  --set-env-vars="FIRESTORE_PROJECT=YOUR_GCP_PROJECT_ID"
+git clone https://github.com/garynation/tonys-game.git && cd tonys-game
+export PROJECT_ID="your-personal-gcp-project-id"
+bash deploy_gcp_setup.sh
 ```
+
+This enables Cloud Run + Firestore (`eur3` free tier), creates a least-privilege service account (`galactic-sheep-sa` with `roles/datastore.user`), and deploys `galactic-sheep` with Denial-of-Wallet caps (`--max-instances=2 --memory=256Mi --cpu=1`).
 
 ## Controls
 

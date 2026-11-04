@@ -413,6 +413,9 @@
       const data = await resp.json();
       if (data && Array.isArray(data.scores)) {
         updateServerStatusBadge(true);
+        if (data.entry && data.entry.id) {
+          state.lastSubmittedId = data.entry.id;
+        }
         const serverScores = saveHighScores(data.scores);
         syncEngineHighScore(getTopScore());
         renderHighScoreTable(serverScores);

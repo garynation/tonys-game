@@ -1,4 +1,4 @@
-name: Publish Docker Image to GHCR
+name: Publish Docker Image to GHCR & Deploy to Cloud Run
 
 on:
   push:
@@ -8,6 +8,7 @@ on:
 permissions:
   contents: read
   packages: write
+  id-token: write
 
 jobs:
   build-and-push:
@@ -35,3 +36,29 @@ jobs:
             sleep 5
           done
           exit 1
+
+      - name: Authenticate to Google Cloud (Optional — runs when GCP_WIF_PROVIDER or GCP_SA_KEY is configured)
+        if: ${{ vars.GCP_PROJECT_ID != '' && (vars.GCP_WIF_PROVIDER != '' || secrets.GCP_SA_KEY != '') }}
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Deploy to Google Cloud Run (Optional — runs when GCP_PROJECT_ID is configured)
+        if: ${{ vars.GCP_PROJECT_ID != '' && (vars.GCP_WIF_PROVIDER != '' || secrets.GCP_SA_KEY != '') }}
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: galactic-sheep
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          region: ${{ vars.GCP_REGION || 'europe-west1' }}
+          image: ghcr.io/garynation/tonys-game:latest
+          flags: >-
+            --allow-unauthenticated
+            --port=8080
+            --cpu=1
+            --memory=256Mi
+            --concurrency=80
+            --min-instances=0
+            --max-instances=2
+            --set-env-vars=FIRESTORE_PROJECT=${{ vars.GCP_PROJECT_ID }},USE_FIRESTORE=true

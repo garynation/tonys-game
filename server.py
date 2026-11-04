@@ -10,10 +10,31 @@ Uses the exact same codebase and container image for both:
      Metadata Server OAuth2 token (zero external pip dependencies) with
      optimistic concurrency (`updateTime` precondition retry) and an in-memory
      TTL read cache so it stays 100% inside the Firestore $0 free tier.
+
+Security Hardening (`v8` — `galacticsheep.co.uk` & On-Prem):
+  - F1: Removed unauthenticated `DELETE /api/leaderboard` and `POST /api/leaderboard/clear`
+        endpoints. Optional admin reset requires `ADMIN_RESET_TOKEN` env var + `X-Admin-Token`
+        header verified with `hmac.compare_digest`.
+  - F2: Strict `MAX_BODY_BYTES = 4096` (4 KB) cap on POST bodies (`HTTP 413`).
+  - F3: Explicit static asset allowlist (`ALLOWED_STATIC_FILES`) so `server.py`, `Dockerfile`,
+        `.git/`, and `data/leaderboard.json` can never be downloaded via HTTP GET.
+  - F4: Server-side score plausibility bounds (`MAX_VALID_SCORE = 250000`, ratio checks),
+        in-memory per-IP rate limiting (`12 POSTs / 60s / IP`), and public `GET` responses
+        expose a one-way `entryHash` instead of the raw write `id` so third parties cannot
+        hijack or overwrite another player's score entry.
+  - F5: Non-root container execution (`UID 10001`, binds port `8080` or `80` via `ip_unprivileged_port_start`).
+  - F6: Origin-checked CORS (`https://galacticsheep.co.uk`, `https://www.galacticsheep.co.uk`,
+        `*.run.app`, and local LAN/localhost origins) + `Content-Security-Policy`,
+        `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, and `Referrer-Policy`.
+  - F7: `/api/health` scrubs `firestoreProject` and reports boolean `persistenceReady`.
+  - F8: Server-side player name sanitization strips `<`, `>`, and control characters.
 """
 
 import argparse
+from collections import deque
 from datetime import datetime, timezone
+import hashlib
+import hmac
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
@@ -31,6 +52,35 @@ LEADERBOARD_FILE = DATA_DIR / "leaderboard.json"
 MAX_TOP_SCORES = 10
 MAX_STORED_SCORES = 50
 
+# Security constants (F1–F8)
+MAX_BODY_BYTES = 4096
+RATE_LIMIT_WINDOW_SEC = 60.0
+RATE_LIMIT_MAX_POSTS = int(os.environ.get("RATE_LIMIT_MAX_POSTS", "12"))
+MAX_VALID_SCORE = 250000
+MAX_VALID_PLANETS = 600
+MAX_VALID_PERFECT_JUMPS = 600
+MAX_VALID_STARS = 200
+ADMIN_RESET_TOKEN = os.environ.get("ADMIN_RESET_TOKEN", "").strip()
+
+ALLOWED_STATIC_FILES = {
+    "/": "index.html",
+    "/index.html": "index.html",
+    "/bundle.html": "bundle.html",
+    "/styles.css": "styles.css",
+    "/assets.js": "assets.js",
+    "/engine.js": "engine.js",
+    "/arcade.js": "arcade.js",
+}
+
+ALLOWED_ORIGIN_PATTERNS = (
+    re.compile(r"^https?://(www\.)?galacticsheep\.co\.uk(:\d+)?$", re.IGNORECASE),
+    re.compile(r"^https://[a-z0-9-]+-[a-z0-9-]+\.[a-z0-9-]+\.run\.app$", re.IGNORECASE),
+    re.compile(r"^https?://(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:\d+)?$", re.IGNORECASE),
+    re.compile(r"^https?://(10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$"),
+    re.compile(r"^https?://[a-z0-9._-]+\.googlers\.com(:\d+)?$", re.IGNORECASE),
+    re.compile(r"^https?://[a-z0-9_-]+(\.local|\.lan|\.home)?(:\d+)?$", re.IGNORECASE),
+)
+
 # Firestore configuration (optional; auto-detected on Cloud Run or via env vars)
 FIRESTORE_DATABASE = os.environ.get("FIRESTORE_DATABASE", "(default)")
 FIRESTORE_COLLECTION = os.environ.get("FIRESTORE_COLLECTION", "galactic_sheep")
@@ -41,6 +91,8 @@ FIRESTORE_API_BASE = os.environ.get(
 FIRESTORE_CACHE_TTL_SEC = float(os.environ.get("FIRESTORE_CACHE_TTL_SEC", "5.0"))
 
 LEADERBOARD_LOCK = threading.Lock()
+RATE_LIMIT_LOCK = threading.Lock()
+_IP_POST_HISTORY: dict[str, deque] = {}
 
 # In-memory cache shared across worker threads
 _MEM_CACHE = {
@@ -76,6 +128,54 @@ def today_str() -> str:
   return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
+def public_entry_hash(entry_id: str) -> str:
+  digest = hashlib.sha256(f"gsheep:{entry_id}".encode("utf-8")).hexdigest()[:12]
+  return f"pub-{digest}"
+
+
+def sanitize_scores_for_public(entries: list) -> list:
+  """Strips internal write IDs from public GET responses so entries cannot be hijacked."""
+  sanitized = []
+  for item in entries:
+    if not isinstance(item, dict):
+      continue
+    copy_item = dict(item)
+    raw_id = str(copy_item.get("id") or "")
+    copy_item["id"] = public_entry_hash(raw_id) if raw_id else ""
+    sanitized.append(copy_item)
+  return sanitized
+
+
+def check_rate_limit(client_ip: str) -> bool:
+  """Returns True if client_ip is within RATE_LIMIT_MAX_POSTS per RATE_LIMIT_WINDOW_SEC."""
+  now = time.monotonic()
+  with RATE_LIMIT_LOCK:
+    if len(_IP_POST_HISTORY) > 2048:
+      stale_ips = [
+          ip for ip, dq in _IP_POST_HISTORY.items()
+          if not dq or (now - dq[-1]) > RATE_LIMIT_WINDOW_SEC
+      ]
+      for ip in stale_ips:
+        _IP_POST_HISTORY.pop(ip, None)
+
+    dq = _IP_POST_HISTORY.get(client_ip)
+    if dq is None:
+      dq = deque()
+      _IP_POST_HISTORY[client_ip] = dq
+    while dq and (now - dq[0]) > RATE_LIMIT_WINDOW_SEC:
+      dq.popleft()
+    if len(dq) >= RATE_LIMIT_MAX_POSTS:
+      return False
+    dq.append(now)
+    return True
+
+
+def is_allowed_origin(origin: str) -> bool:
+  if not origin:
+    return False
+  return any(pat.match(origin) for pat in ALLOWED_ORIGIN_PATTERNS)
+
+
 def is_legacy_seed_entry(entry: dict) -> bool:
   if not isinstance(entry, dict):
     return True
@@ -105,33 +205,64 @@ def normalize_biggest_planet(bp, fallback_obj=None) -> dict:
         re.IGNORECASE,
     )
     if match:
-      name = (match.group(1) or "").strip() or src
+      name = re.sub(r"[<>\"'`]+", "", (match.group(1) or "").strip())[:24] or "Planet"
       tier = (match.group(2) or "MEDIUM").upper()
-      diameter = int(match.group(3) or 0)
+      if tier not in ("MINI", "SMALL", "MEDIUM", "LARGE", "COLOSSAL"):
+        tier = "MEDIUM"
+      diameter = max(0, min(200, int(match.group(3) or 0)))
       radius = round(diameter / 2) if diameter else 0
       return {"name": name, "diameter": diameter, "radius": radius, "tier": tier}
-    return {"name": src.strip(), "diameter": 0, "radius": 0, "tier": "MEDIUM"}
+    clean_str = re.sub(r"[<>\"'`]+", "", src.strip())[:24] or "Planet"
+    return {"name": clean_str, "diameter": 0, "radius": 0, "tier": "MEDIUM"}
   if isinstance(src, dict):
-    name = str(src.get("name") or src.get("planetName") or "Planet").strip()
+    raw_name = str(src.get("name") or src.get("planetName") or "Planet").strip()
+    name = re.sub(r"[<>\"'`]+", "", raw_name)[:24] or "Planet"
     try:
-      radius = int(float(src.get("radius") or 0))
+      radius = max(0, min(100, int(float(src.get("radius") or 0))))
     except (ValueError, TypeError):
       radius = 0
     try:
-      diameter = int(float(src.get("diameter") or (radius * 2 if radius else 0)))
+      diameter = max(0, min(200, int(float(src.get("diameter") or (radius * 2 if radius else 0)))))
     except (ValueError, TypeError):
       diameter = radius * 2
     if not radius and diameter:
       radius = round(diameter / 2)
     tier = str(src.get("tier") or src.get("sizeTier") or "MEDIUM").upper()
+    if tier not in ("MINI", "SMALL", "MEDIUM", "LARGE", "COLOSSAL"):
+      tier = "MEDIUM"
     return {"name": name, "diameter": diameter, "radius": radius, "tier": tier}
   return {"name": "None", "diameter": 0, "radius": 0, "tier": "MINI"}
 
 
 def normalize_player_name(raw_name) -> str:
-  cleaned = re.sub(r"[\x00-\x1f\x7f]+", "", str(raw_name or "")).strip()
+  cleaned = re.sub(r"[\x00-\x1f\x7f<>]+", "", str(raw_name or "")).strip()
   cleaned = re.sub(r"\s+", " ", cleaned)[:24]
   return cleaned if cleaned else "Tony"
+
+
+def validate_score_plausibility(entry: dict) -> tuple[bool, str]:
+  """Rejects forged or impossible scores before they can pollute the leaderboard."""
+  score = int(entry.get("score") or 0)
+  planets = int(entry.get("planetsCleared") or 0)
+  perfect = int(entry.get("perfectJumps") or 0)
+  stars = int(entry.get("starsCollected") or 0)
+
+  if score < 0 or score > MAX_VALID_SCORE:
+    return False, f"Score exceeds maximum plausible bound ({MAX_VALID_SCORE})"
+  if planets < 0 or planets > MAX_VALID_PLANETS:
+    return False, "Invalid planetsCleared count"
+  if perfect < 0 or perfect > MAX_VALID_PERFECT_JUMPS:
+    return False, "Invalid perfectJumps count"
+  if stars < 0 or stars > MAX_VALID_STARS:
+    return False, "Invalid starsCollected count"
+
+  # Theoretical upper bound per planet (~2500 pts with streak + colossal + perfect jump)
+  # plus star bonuses (~600 pts each) plus survival ticks (~5000 pts buffer)
+  max_plausible_for_run = (planets * 2600) + (perfect * 500) + (stars * 650) + 6000
+  if score > max_plausible_for_run:
+    return False, "Score is inconsistent with run telemetry"
+
+  return True, ""
 
 
 def normalize_entry(raw: dict, idx: int = 0) -> dict:
@@ -156,11 +287,12 @@ def normalize_entry(raw: dict, idx: int = 0) -> dict:
     stars_collected = 0
 
   bp = normalize_biggest_planet(raw.get("biggestPlanet"), raw.get("biggestPlanetObj"))
-  entry_id = str(
+  raw_id = str(
       raw.get("id")
       or raw.get("runKey")
       or f"run-{int(datetime.now(timezone.utc).timestamp() * 1000)}-{idx}"
   )
+  entry_id = re.sub(r"[^a-zA-Z0-9_.-]+", "", raw_id)[:64] or f"run-{idx}"
 
   return {
       "id": entry_id,
@@ -173,8 +305,8 @@ def normalize_entry(raw: dict, idx: int = 0) -> dict:
       "perfectJumps": perfect_jumps,
       "starsCollected": stars_collected,
       "biggestPlanet": bp,
-      "date": str(raw.get("date") or today_str())[:10],
-      "updatedAt": raw.get("updatedAt") or now_iso(),
+      "date": re.sub(r"[^0-9-]+", "", str(raw.get("date") or today_str()))[:10] or today_str(),
+      "updatedAt": now_iso(),
   }
 
 
@@ -185,6 +317,9 @@ def sort_and_rank(entries: list) -> list:
       continue
     norm = normalize_entry(e)
     if norm["score"] <= 0:
+      continue
+    ok, _ = validate_score_plausibility(norm)
+    if not ok:
       continue
     eid = norm["id"]
     if eid in dedup:
@@ -302,7 +437,6 @@ def resolve_firestore_project() -> str:
     return ""
   if explicit:
     return explicit
-  # Auto-detect if running inside Google Cloud Run (`K_SERVICE` is always set on Cloud Run)
   if os.environ.get("K_SERVICE") or use_fs_flag in ("1", "true", "yes"):
     try:
       return _fetch_metadata("project/project-id")
@@ -403,7 +537,6 @@ def get_scores_unlocked(force_refresh: bool = False) -> list:
       _MEM_CACHE["loaded_at"] = now
     return list(_MEM_CACHE["scores"])
 
-  # Firestore mode with in-memory TTL cache (avoids reading Firestore on every 4s poll)
   if (
       not force_refresh
       and _MEM_CACHE["scores"] is not None
@@ -431,7 +564,6 @@ def upsert_score_unlocked(candidate: dict) -> list:
   project_id = _MEM_CACHE["project_id"]
 
   if project_id:
-    # Optimistic concurrency loop across Cloud Run instances (up to 4 attempts)
     for attempt in range(4):
       try:
         if attempt > 0 or _MEM_CACHE["scores"] is None:
@@ -452,7 +584,6 @@ def upsert_score_unlocked(candidate: dict) -> list:
         return list(saved_scores)
       except urllib.error.HTTPError as err:
         if err.code in (400, 409, 412) and attempt < 3:
-          # Precondition failed (concurrent write from another Cloud Run instance); re-read & retry
           continue
         print(f"[GalacticSheep] Firestore write fallback to local file: {err}", flush=True)
         break
@@ -460,7 +591,6 @@ def upsert_score_unlocked(candidate: dict) -> list:
         print(f"[GalacticSheep] Firestore write fallback to local file: {exc}", flush=True)
         break
 
-  # Local file mode (or fallback)
   current = _MEM_CACHE["scores"] if _MEM_CACHE["scores"] is not None else load_local_file_unlocked()
   merged = merge_entry_into_list(current, candidate)
   saved = save_local_file_unlocked(merged)
@@ -486,18 +616,56 @@ def clear_scores_unlocked() -> list:
 
 
 class GalacticSheepHTTPRequestHandler(SimpleHTTPRequestHandler):
-  """Serves static assets and the `/api/leaderboard` multi-player REST endpoints."""
+  """Serves allowlisted static game assets and hardened `/api/leaderboard` endpoints."""
 
   def __init__(self, *args, **kwargs):
     super().__init__(*args, directory=str(BASE_DIR), **kwargs)
+
+  def _client_ip(self) -> str:
+    xff = (self.headers.get("X-Forwarded-For") or "").strip()
+    if xff:
+      # On Cloud Run behind Google Front End, the first/rightmost client IP is forwarded
+      return xff.split(",")[0].strip()
+    return self.client_address[0] if self.client_address else "unknown"
+
+  def _is_admin_authorized(self) -> bool:
+    if not ADMIN_RESET_TOKEN:
+      return False
+    provided = (self.headers.get("X-Admin-Token") or "").strip()
+    if not provided:
+      return False
+    return hmac.compare_digest(provided, ADMIN_RESET_TOKEN)
 
   def end_headers(self):
     self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
     self.send_header("Pragma", "no-cache")
     self.send_header("Expires", "0")
-    self.send_header("Access-Control-Allow-Origin", "*")
-    self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-    self.send_header("Access-Control-Allow-Headers", "Content-Type")
+    # Security headers (F6)
+    self.send_header("X-Content-Type-Options", "nosniff")
+    self.send_header("X-Frame-Options", "DENY")
+    self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
+    self.send_header(
+        "Permissions-Policy",
+        "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+    )
+    self.send_header(
+        "Content-Security-Policy",
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com data:; "
+        "img-src 'self' data: blob:; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self'",
+    )
+    origin = (self.headers.get("Origin") or "").strip()
+    if origin and is_allowed_origin(origin):
+      self.send_header("Access-Control-Allow-Origin", origin)
+      self.send_header("Vary", "Origin")
+      self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+      self.send_header("Access-Control-Allow-Headers", "Content-Type")
     super().end_headers()
 
   def _send_json(self, status_code: int, payload: dict) -> None:
@@ -517,7 +685,7 @@ class GalacticSheepHTTPRequestHandler(SimpleHTTPRequestHandler):
     if parsed.path in ("/api/leaderboard", "/api/leaderboard/"):
       with LEADERBOARD_LOCK:
         all_scores = get_scores_unlocked()
-        top_scores = all_scores[:MAX_TOP_SCORES]
+        top_scores = sanitize_scores_for_public(all_scores[:MAX_TOP_SCORES])
         top_score = top_scores[0]["score"] if top_scores else 0
         backend = _MEM_CACHE["backend"]
       self._send_json(
@@ -534,23 +702,46 @@ class GalacticSheepHTTPRequestHandler(SimpleHTTPRequestHandler):
       return
 
     if parsed.path == "/api/health":
+      # F7: Do not expose raw GCP project ID on public health endpoint
       self._send_json(
           200,
           {
               "ok": True,
               "service": "galactic-sheep",
               "backend": _MEM_CACHE["backend"],
-              "firestoreProject": _MEM_CACHE["project_id"] or None,
+              "persistenceReady": True,
               "updatedAt": now_iso(),
           },
       )
       return
 
+    # F3: Strict static asset allowlist — block access to server.py, Dockerfile, .git, data/leaderboard.json
+    clean_path = parsed.path or "/"
+    target_rel = ALLOWED_STATIC_FILES.get(clean_path)
+    if not target_rel:
+      self._send_json(404, {"ok": False, "error": "Not found"})
+      return
+
+    self.path = "/" + target_rel
     return super().do_GET()
 
   def do_POST(self):
     parsed = urllib.parse.urlparse(self.path)
+
+    # F6: If an Origin header is present, verify it matches our allowed origins
+    origin = (self.headers.get("Origin") or "").strip()
+    if origin and not is_allowed_origin(origin):
+      self._send_json(403, {"ok": False, "error": "Forbidden origin"})
+      return
+
+    # F1: Admin-only reset route (disabled unless ADMIN_RESET_TOKEN is set and matched)
     if parsed.path in ("/api/leaderboard/clear", "/api/leaderboard/reset"):
+      if not self._is_admin_authorized():
+        self._send_json(
+            403,
+            {"ok": False, "error": "Leaderboard reset is disabled."},
+        )
+        return
       with LEADERBOARD_LOCK:
         clear_scores_unlocked()
         backend = _MEM_CACHE["backend"]
@@ -568,8 +759,34 @@ class GalacticSheepHTTPRequestHandler(SimpleHTTPRequestHandler):
       return
 
     if parsed.path in ("/api/leaderboard", "/api/leaderboard/"):
-      content_len = int(self.headers.get("Content-Length") or 0)
-      raw_body = self.rfile.read(content_len).decode("utf-8") if content_len > 0 else "{}"
+      # F2: Enforce strict 4 KB payload ceiling before reading socket stream
+      try:
+        content_len = int(self.headers.get("Content-Length") or 0)
+      except ValueError:
+        self._send_json(400, {"ok": False, "error": "Invalid Content-Length"})
+        return
+
+      if content_len < 0 or content_len > MAX_BODY_BYTES:
+        self._send_json(
+            413,
+            {"ok": False, "error": f"Payload exceeds {MAX_BODY_BYTES} byte limit"},
+        )
+        return
+
+      # F4: Per-IP rate limiting
+      client_ip = self._client_ip()
+      if not check_rate_limit(client_ip):
+        self._send_json(
+            429,
+            {"ok": False, "error": "Rate limit exceeded. Try again in a minute."},
+        )
+        return
+
+      raw_body = (
+          self.rfile.read(content_len).decode("utf-8", errors="replace")
+          if content_len > 0
+          else "{}"
+      )
       try:
         data = json.loads(raw_body) if raw_body.strip() else {}
       except json.JSONDecodeError:
@@ -580,7 +797,14 @@ class GalacticSheepHTTPRequestHandler(SimpleHTTPRequestHandler):
         self._send_json(400, {"ok": False, "error": "Payload must be a JSON object"})
         return
 
+      # F1: Block inline clear/reset actions unless admin-authorized
       if data.get("action") in ("clear", "reset") or data.get("reset") is True:
+        if not self._is_admin_authorized():
+          self._send_json(
+              403,
+              {"ok": False, "error": "Leaderboard reset is disabled."},
+          )
+          return
         with LEADERBOARD_LOCK:
           clear_scores_unlocked()
           backend = _MEM_CACHE["backend"]
@@ -600,7 +824,7 @@ class GalacticSheepHTTPRequestHandler(SimpleHTTPRequestHandler):
       if is_legacy_seed_entry(data):
         with LEADERBOARD_LOCK:
           all_scores = get_scores_unlocked()
-          top_scores = all_scores[:MAX_TOP_SCORES]
+          top_scores = sanitize_scores_for_public(all_scores[:MAX_TOP_SCORES])
           top_score = top_scores[0]["score"] if top_scores else 0
           backend = _MEM_CACHE["backend"]
         self._send_json(
@@ -621,7 +845,7 @@ class GalacticSheepHTTPRequestHandler(SimpleHTTPRequestHandler):
       if candidate["score"] <= 0:
         with LEADERBOARD_LOCK:
           all_scores = get_scores_unlocked()
-          top_scores = all_scores[:MAX_TOP_SCORES]
+          top_scores = sanitize_scores_for_public(all_scores[:MAX_TOP_SCORES])
           top_score = top_scores[0]["score"] if top_scores else 0
           backend = _MEM_CACHE["backend"]
         self._send_json(
@@ -638,11 +862,19 @@ class GalacticSheepHTTPRequestHandler(SimpleHTTPRequestHandler):
         )
         return
 
+      # F4: Server-side plausibility validation
+      plausible, reason = validate_score_plausibility(candidate)
+      if not plausible:
+        self._send_json(422, {"ok": False, "error": reason})
+        return
+
       with LEADERBOARD_LOCK:
         all_scores = upsert_score_unlocked(candidate)
-        top_scores = all_scores[:MAX_TOP_SCORES]
+        top_scores = sanitize_scores_for_public(all_scores[:MAX_TOP_SCORES])
         top_score = top_scores[0]["score"] if top_scores else 0
-        saved_entry = next((e for e in all_scores if e.get("id") == candidate["id"]), candidate)
+        raw_saved = next((e for e in all_scores if e.get("id") == candidate["id"]), candidate)
+        saved_entry = dict(raw_saved)
+        saved_entry["id"] = public_entry_hash(str(raw_saved.get("id") or ""))
         backend = _MEM_CACHE["backend"]
 
       self._send_json(
@@ -664,25 +896,27 @@ class GalacticSheepHTTPRequestHandler(SimpleHTTPRequestHandler):
     self._send_json(404, {"ok": False, "error": f"Unknown endpoint {parsed.path}"})
 
   def do_DELETE(self):
-    parsed = urllib.parse.urlparse(self.path)
-    if parsed.path in ("/api/leaderboard", "/api/leaderboard/"):
-      with LEADERBOARD_LOCK:
-        clear_scores_unlocked()
-        backend = _MEM_CACHE["backend"]
+    # F1: Disable public DELETE /api/leaderboard
+    if not self._is_admin_authorized():
       self._send_json(
-          200,
-          {
-              "ok": True,
-              "backend": backend,
-              "scores": [],
-              "highScore": 0,
-              "totalEntries": 0,
-              "updatedAt": now_iso(),
-          },
+          403,
+          {"ok": False, "error": "Leaderboard reset is disabled."},
       )
       return
-
-    self._send_json(404, {"ok": False, "error": f"Unknown endpoint {parsed.path}"})
+    with LEADERBOARD_LOCK:
+      clear_scores_unlocked()
+      backend = _MEM_CACHE["backend"]
+    self._send_json(
+        200,
+        {
+            "ok": True,
+            "backend": backend,
+            "scores": [],
+            "highScore": 0,
+            "totalEntries": 0,
+            "updatedAt": now_iso(),
+        },
+    )
 
 
 def init_storage_backend() -> None:
@@ -692,7 +926,7 @@ def init_storage_backend() -> None:
     _MEM_CACHE["project_id"] = project_id
     if project_id:
       _MEM_CACHE["backend"] = "firestore"
-      scores = get_scores_unlocked(force_refresh=True)
+      get_scores_unlocked(force_refresh=True)
     else:
       _MEM_CACHE["backend"] = "local"
       cleaned = load_local_file_unlocked()
@@ -707,7 +941,7 @@ def main():
       "--port",
       type=int,
       default=int(os.environ.get("PORT", "8765")),
-      help="Port to listen on (default: 8765 or $PORT)",
+      help="Port to listen on (default: $PORT or 8765)",
   )
   parser.add_argument(
       "--host",
@@ -724,7 +958,7 @@ def main():
   server = ThreadingHTTPServer((args.host, args.port), GalacticSheepHTTPRequestHandler)
   print(
       f"Galactic Sheep server listening on http://{args.host}:{args.port} "
-      f"(backend={_MEM_CACHE['backend']}, project={_MEM_CACHE['project_id'] or 'none'}, "
+      f"(backend={_MEM_CACHE['backend']}, project={'configured' if _MEM_CACHE['project_id'] else 'none'}, "
       f"local_file={LEADERBOARD_FILE})",
       flush=True,
   )
