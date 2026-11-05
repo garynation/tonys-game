@@ -23,12 +23,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push Docker image (with retry)
+      - name: Build, smoke-test, and push Docker image (with retry)
         run: |
           for attempt in 1 2 3; do
-            echo "Attempt $attempt: building and pushing ghcr.io/garynation/tonys-game:latest..."
-            if docker build -t ghcr.io/garynation/tonys-game:latest . && docker push ghcr.io/garynation/tonys-game:latest; then
-              echo "Successfully built and pushed ghcr.io/garynation/tonys-game:latest"
+            echo "Attempt $attempt: building ghcr.io/garynation/tonys-game:latest..."
+            if docker build -t ghcr.io/garynation/tonys-game:latest . && \
+               docker run --rm ghcr.io/garynation/tonys-game:latest python3 /app/server.py --help >/dev/null && \
+               docker push ghcr.io/garynation/tonys-game:latest; then
+              echo "Successfully built, verified, and pushed ghcr.io/garynation/tonys-game:latest"
               exit 0
             fi
             echo "Attempt $attempt failed, retrying in 5s..."
